@@ -1,0 +1,2652 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#142420">
+<title>Темиртау — рабочие карты</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-storage-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics-compat.js" defer></script>
+<style>
+:root {
+  --ink: #142420;
+  --surface: #F4F6F4;
+  --surface-deep: #E6EAE6;
+  --line: #D7DDD6;
+  --text-mut: #5C6B64;
+  --brand: #0E5C4F;
+  --brand-dim: #0A4A40;
+  --pin-active: #D6432E;
+  --pin-draft: #E08A2E;
+  --go-green: #2E9A5C;
+  --locate-blue: #2C74B3;
+  --shadow: 0 6px 24px rgba(10, 30, 20, 0.18);
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+  font-family: var(--font-display); color: var(--ink);
+}
+#map { position: fixed; inset: 0; z-index: 0; background: var(--ink); }
+
+.topbar { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 1200; display: flex; gap: 8px; align-items: center; }
+.search-wrap { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; background: #fff; border-radius: 999px; box-shadow: var(--shadow); padding: 4px 6px 4px 16px; }
+.search-wrap input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 15px; padding: 10px 4px; color: var(--ink); font-family: inherit; }
+.search-suggestions {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+  background: #fff; border-radius: 16px; box-shadow: var(--shadow);
+  max-height: 320px; overflow-y: auto; padding: 6px; z-index: 1200;
+}
+.search-suggestions.hidden { display: none; }
+.search-suggestion-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  font-size: 14px; color: var(--ink);
+}
+.search-suggestion-item:hover, .search-suggestion-item:active { background: var(--surface-deep); }
+.search-suggestion-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+.search-suggestion-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-suggestion-sub { font-size: 10.5px; color: #8a978f; flex-shrink: 0; }
+.icon-btn { width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: none; background: #fff; box-shadow: var(--shadow); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink); position: relative; }
+.icon-btn:active { transform: scale(0.93); }
+.icon-btn:disabled { opacity: 0.6; }
+.icon-btn.locate-active { background: var(--locate-blue); color: #fff; box-shadow: 0 0 0 3px rgba(44,116,179,.28), var(--shadow); }
+.search-btn { background: var(--brand); color: #fff; }
+.badge { position: absolute; top: -3px; right: -3px; background: var(--pin-active); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px #fff; font-variant-numeric: tabular-nums; }
+
+.backdrop { position: fixed; inset: 0; background: rgba(10, 20, 15, 0.35); z-index: 1500; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+.backdrop.show { opacity: 1; pointer-events: auto; }
+.panel { position: fixed; top: 0; right: 0; height: 100%; width: min(420px, 100vw); background: var(--surface); box-shadow: -8px 0 30px rgba(0,0,0,0.22); transform: translateX(100%); transition: transform 0.28s ease; z-index: 2000; display: flex; flex-direction: column; }
+.panel.open { transform: translateX(0); }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 18px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.panel-header h3 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+.panel-body { padding: 18px 20px 28px; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+
+.field-label { display: block; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-mut); margin: 18px 0 6px; }
+.field-label:first-child { margin-top: 0; }
+.field-input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-size: 15px; font-family: inherit; color: var(--ink); background: var(--surface-deep); resize: vertical; }
+.field-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; background: #fff; }
+.coords-line { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-mut); margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+.photo-upload { margin-top: 4px; }
+.photo-preview-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin-top: 10px; display: none; }
+.video-preview-el { width: 100%; border-radius: 10px; margin-top: 10px; display: none; background: #000; max-height: 260px; }
+.panel-actions { display: flex; gap: 10px; margin-top: 26px; }
+.panel-actions .btn { flex: 1; }
+
+.btn { border: none; border-radius: 10px; padding: 13px 16px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-block; box-sizing: border-box; }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.6; }
+.btn-primary { background: var(--brand); color: #fff; }
+.btn-secondary { background: var(--surface-deep); color: var(--ink); }
+.btn-success { background: var(--go-green); color: #fff; width: 100%; margin-top: 24px; font-size: 16px; padding: 14px; }
+.btn-delete-outline { background: transparent; border: 1.5px solid var(--pin-active); color: var(--pin-active); width: 100%; margin-top: 10px; }
+
+.detail-address { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; }
+.link-btn { background: none; border: none; color: var(--brand); font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+.detail-comment { margin-top: 14px; font-size: 14.5px; line-height: 1.5; background: var(--surface-deep); padding: 12px 14px; border-radius: 10px; }
+.detail-comment.muted { color: var(--text-mut); font-style: italic; }
+.detail-photo-img { width: 100%; border-radius: 10px; margin-top: 12px; max-height: 320px; object-fit: cover; display: block; }
+.detail-meta { margin-top: 16px; font-size: 12.5px; color: var(--text-mut); line-height: 1.7; }
+.field-hint { font-size: 11.5px; color: var(--text-mut); margin-top: 6px; line-height: 1.5; }
+
+.card-photos-section { margin-top: 14px; }
+.tasks-section { margin-top: 14px; background: var(--surface-deep); border-radius: 12px; padding: 12px 14px; }
+.tasks-title { font-size: 12.5px; font-weight: 700; color: var(--text-dim, #9aa1b2); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; }
+.task-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.task-row:last-child { border-bottom: none; }
+.task-name { font-size: 13.5px; }
+.task-row.task-done .task-name { opacity: .55; text-decoration: line-through; }
+.task-status { font-size: 12.5px; white-space: nowrap; }
+.card-photo-slot { display: flex; align-items: center; gap: 10px; background: var(--surface-deep); border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+.card-photo-slot .btn-delete-outline { width: auto; margin-top: 0; padding: 8px 10px; }
+.card-photo-slot-info { flex: 1; min-width: 0; font-size: 13px; color: var(--text-mut); }
+.card-photo-slot-info b { color: var(--ink); }
+.btn-sm { padding: 8px 10px; font-size: 12.5px; border-radius: 8px; flex-shrink: 0; }
+.card-photos-gallery { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.card-photos-gallery.show { display: grid; }
+.card-photos-gallery.single-photo { grid-template-columns: 1fr; }
+.card-photos-gallery img { width: 100%; border-radius: 10px; max-height: 260px; object-fit: cover; display: block; }
+
+.history-counter { background: var(--ink); color: #fff; border-radius: 10px; padding: 20px 18px; text-align: center; margin: 0 0 20px; position: relative; overflow: hidden; }
+.history-counter::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: repeating-linear-gradient(90deg, var(--go-green) 0 8px, transparent 8px 14px); }
+.big-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 40px; font-weight: 700; line-height: 1; }
+.counter-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.6); margin-top: 8px; }
+.empty-state { color: var(--text-mut); text-align: center; padding: 30px 14px; font-size: 14px; line-height: 1.5; }
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-item { padding: 12px 14px; background: var(--surface-deep); border-radius: 10px; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+.history-item:active { background: var(--line); }
+.history-item-address { font-size: 14px; font-weight: 700; }
+.history-item-date { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-mut); margin-top: 3px; }
+.history-hint { font-size: 11.5px; color: var(--text-mut); text-align: center; margin-top: 14px; }
+
+.toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(16px); background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 13.5px; opacity: 0; transition: all 0.25s; z-index: 3000; max-width: 88vw; text-align: center; box-shadow: var(--shadow); pointer-events: none; }
+.route-info {
+  position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+  background: #fff; color: var(--ink); padding: 10px 10px 10px 18px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 700; box-shadow: var(--shadow); z-index: 1400;
+  display: flex; align-items: center; gap: 10px; max-width: 92vw;
+}
+.route-info.hidden { display: none; }
+.route-info button {
+  background: var(--surface-deep); border: none; border-radius: 50%;
+  width: 26px; height: 26px; flex-shrink: 0; cursor: pointer; font-size: 13px; color: var(--ink);
+}
+.route-btn {
+  position: fixed; bottom: 100px; right: 12px; z-index: 1000;
+  width: 48px; height: 48px; border-radius: 50%; background: #fff; box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  font-size: 21px; border: none;
+}
+.route-btn:active { transform: scale(0.93); }
+.route-panel {
+  position: fixed; top: 128px; left: 12px; right: 12px; max-width: 380px; margin: 0 auto;
+  background: #fff; border-radius: 16px; box-shadow: var(--shadow); padding: 12px; z-index: 1300;
+}
+.route-panel.hidden { display: none; }
+.route-panel-header { display: flex; align-items: center; justify-content: space-between; font-weight: 800; font-size: 14px; margin-bottom: 10px; color: var(--ink); }
+.route-panel-header button { background: var(--surface-deep); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; color: var(--ink); }
+.route-panel-field { display: flex; align-items: center; gap: 6px; background: var(--surface-deep); border-radius: 10px; padding: 4px 6px 4px 10px; margin-bottom: 8px; }
+.route-panel-field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 13.5px; padding: 8px 2px; color: var(--ink); font-family: inherit; }
+.route-panel-field button { background: #fff; border: none; border-radius: 8px; width: 30px; height: 30px; flex-shrink: 0; cursor: pointer; font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.route-build-btn { width: 100%; background: var(--brand); color: #fff; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.route-panel-profiles { display: flex; gap: 6px; margin-bottom: 8px; }
+.route-profile-btn { flex: 1; background: var(--surface-deep); border: none; border-radius: 9px; padding: 9px 4px; font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--ink); font-family: inherit; }
+.route-profile-btn.active { background: var(--brand); color: #fff; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.loading-overlay { position: fixed; inset: 0; background: var(--ink); z-index: 5000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; gap: 6px; transition: opacity 0.35s; }
+.loading-overlay.hide { opacity: 0; pointer-events: none; }
+.loading-mark { font-size: 34px; margin-bottom: 6px; }
+.loading-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+.loading-sub { font-size: 12px; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.14em; }
+.loading-spinner { width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--go-green); border-radius: 50%; animation: spin 0.8s linear infinite; margin-top: 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.custom-pin { background: transparent !important; border: none !important; }
+.section-switcher { position: fixed; z-index: 1100; top: 68px; left: 12px; right: 12px; display: flex; gap: 6px; padding: 5px; border-radius: 14px; background: rgba(255,255,255,0.95); box-shadow: var(--shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.section-tab { flex: 1; min-width: 0; border: 0; border-radius: 10px; background: transparent; color: var(--text-mut); font: 700 12px/1.15 var(--font-display); padding: 10px 7px; cursor: pointer; }
+.section-tab.active { background: var(--brand); color: #fff; box-shadow: 0 2px 7px rgba(14,92,79,0.25); }
+.section-tab:active { transform: scale(0.98); }
+.feature-popup-title { font-size: 14px; font-weight: 800; line-height: 1.3; margin-bottom: 6px; }
+.feature-popup-sub { color: var(--text-mut); font-size: 11.5px; line-height: 1.35; margin-bottom: 10px; }
+.zone-legend { display: none !important; } /* Скрыто по просьбе */
+.feature-description { white-space: pre-wrap; font-size: 14px; line-height: 1.55; background: var(--surface-deep); padding: 12px 14px; border-radius: 10px; margin-top: 14px; }
+.feature-folder { display: inline-block; font-size: 11px; font-weight: 700; color: var(--brand); background: #dcece7; padding: 4px 7px; border-radius: 99px; margin-top: 10px; }
+.list-section-title { margin: 18px 0 7px; color: var(--text-mut); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.list-section-title:first-child { margin-top: 0; }
+.house-num-icon { background: transparent !important; border: none !important; pointer-events: none; }
+.house-num-label {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  -webkit-text-stroke: 1.25px rgba(0,0,0,0.75);
+  paint-order: stroke fill;
+  text-shadow: 0 0 3px rgba(0,0,0,0.6);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: 0.01em;
+  display: inline-block;
+  transform: translate(-50%, -50%);
+}
+.street-label {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #f4f4ee;
+  -webkit-text-stroke: 1.25px rgba(0,0,0,0.7);
+  paint-order: stroke fill;
+  text-shadow: 0 0 3px rgba(0,0,0,0.55);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: 0.01em;
+  display: inline-block;
+  transform: translate(-50%, -50%);
+}
+.landmark-marker { display: inline-flex; align-items: center; gap: 4px; pointer-events: none; transform: translate(-50%, -50%); }
+.landmark-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.85);
+}
+.landmark-name {
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fff;
+  -webkit-text-stroke: 1.25px rgba(0,0,0,0.7);
+  paint-order: stroke fill;
+  text-shadow: 0 0 3px rgba(0,0,0,0.55);
+}
+
+.leaflet-popup-content-wrapper { border-radius: 12px; }
+.leaflet-popup-content { margin: 13px 15px; font-family: inherit; min-width: 180px; }
+.popup-address { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.popup-coords { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-mut); margin-bottom: 10px; }
+.popup-btn { background: var(--brand); color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; font-family: inherit; }
+
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+body:not(.admin-mode) button[onclick*="delete"],
+body:not(.admin-mode) button[onclick*="edit"] {
+    display: none !important;
+}
+
+/* Стили для новой кнопки инфо об авторах */
+.info-btn-circle { position: fixed; bottom: 24px; left: 12px; z-index: 1000; width: 44px; height: 44px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: var(--font-mono); font-weight: bold; font-size: 20px; color: var(--brand); border: none; }
+.info-btn-circle:active { transform: scale(0.93); }
+.info-panel-box { position: fixed; bottom: 24px; left: 12px; z-index: 1001; background: rgba(255,255,255,0.95); padding: 14px 18px; border-radius: 12px; box-shadow: var(--shadow); font-size: 13.5px; display: flex; align-items: flex-start; gap: 14px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); line-height: 1.4; transition: opacity 0.2s; max-width: 280px; }
+.info-panel-box .author-line { margin-top: 4px; }
+.info-panel-box .author-line a { color: var(--brand); font-weight: 700; text-decoration: none; }
+.info-panel-box .author-line a:active { opacity: 0.7; }
+.info-panel-box.hidden { display: none; opacity: 0; pointer-events: none; }
+.info-panel-box .close-btn { background: var(--surface-deep); border: none; font-size: 14px; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; color: var(--ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: auto; }
+.info-panel-box .close-btn:active { background: var(--line); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+@media (max-width: 420px) {
+  .topbar { top: 10px; left: 8px; right: 8px; gap: 6px; }
+  .icon-btn { width: 40px; height: 40px; font-size: 16px; }
+  .search-wrap input { font-size: 14px; }
+  .section-switcher { top: 60px; left: 8px; right: 8px; gap: 4px; padding: 4px; }
+  .section-tab { font-size: 10.5px; padding: 9px 4px; }
+  .route-panel { top: 116px; left: 8px; right: 8px; }
+}
+
+/* Плавающая карточка объекта (ГИС-контроль / ремонтные работы) */
+#feature-line-svg-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 1799; display: none; }
+#feature-line-svg { width: 100%; height: 100%; overflow: visible; }
+.feature-card {
+  position: fixed; z-index: 1800; width: 224px; max-width: 74vw;
+  background: #fff; border-radius: 12px; box-shadow: var(--shadow);
+  overflow: hidden; border: 1px solid var(--line);
+}
+.feature-card.hidden { display: none; }
+.feature-card-drag {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 6px;
+  padding: 9px 6px 9px 11px; background: var(--surface-deep);
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.feature-card-drag:active { cursor: grabbing; }
+.feature-card-title { font-size: 12px; font-weight: 800; line-height: 1.25; }
+.feature-card-close {
+  flex-shrink: 0; width: 21px; height: 21px; border-radius: 50%; border: none;
+  background: #fff; color: var(--text-mut); font-size: 10.5px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.feature-card-close:active { background: var(--line); }
+.feature-card-body { padding: 9px 11px 10px; font-size: 11px; line-height: 1.35; max-height: 30vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.feature-card-sub { color: var(--text-mut); font-size: 9.5px; font-family: var(--font-mono); margin-bottom: 5px; }
+.feature-card-area { display: inline-block; font-weight: 700; background: #dcece7; color: var(--brand); padding: 2px 7px; border-radius: 99px; font-size: 10px; margin-bottom: 5px; }
+.feature-card-desc { white-space: pre-wrap; background: var(--surface-deep); border-radius: 8px; padding: 7px 8px; max-height: 76px; overflow-y: auto; margin-top: 2px; font-size: 10.5px; }
+.feature-card-actions { display: flex; gap: 6px; margin-top: 7px; }
+.feature-card-actions .btn { flex: 1; padding: 7px 5px; font-size: 10.5px; }
+@media (max-width: 420px) {
+  .feature-card { width: 196px; max-width: 70vw; }
+  .feature-card-body { max-height: 26vh; }
+  .feature-card-desc { max-height: 62px; }
+}
+
+/* Маркер "моё местоположение" с конусом направления */
+.user-location-marker-wrap { background: transparent !important; border: none !important; }
+.user-location-icon { position: relative; width: 46px; height: 46px; }
+.user-location-cone {
+  position: absolute; left: 50%; top: 50%; width: 34px; height: 30px;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -100%) rotate(0deg);
+  transition: transform .15s linear;
+  pointer-events: none;
+  clip-path: polygon(50% 100%, 10% 0%, 90% 0%);
+  background: radial-gradient(circle at 50% 100%, rgba(214,67,46,.55) 0%, rgba(214,67,46,.28) 55%, rgba(214,67,46,0) 100%);
+}
+.user-location-dot {
+  position: absolute; left: 50%; top: 50%; width: 18px; height: 18px;
+  background: #2C74B3; border: 3px solid #fff; border-radius: 50%;
+  transform: translate(-50%, -50%); box-shadow: 0 1px 6px rgba(0,0,0,.4);
+}
+.user-location-pulse {
+  position: absolute; left: 50%; top: 50%; width: 18px; height: 18px;
+  background: rgba(44,116,179,.35); border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: loc-pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes loc-pulse {
+  0%   { width: 18px; height: 18px; opacity: .7; }
+  100% { width: 52px; height: 52px; opacity: 0; }
+}
+
+
+/* ── Плавающий тулбар рисования зоны ── */
+.zone-draw-toolbar {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  z-index: 2100; display: none; align-items: center; gap: 10px;
+  background: var(--ink); color: #fff; border-radius: 999px;
+  padding: 10px 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  font-size: 13.5px; font-weight: 700; white-space: nowrap;
+  max-width: 96vw;
+}
+.zone-draw-toolbar.active { display: flex; }
+.zdtb-count { font-family: var(--font-mono); font-size: 22px; font-weight: 800; color: var(--go-green); min-width: 28px; text-align: center; }
+.zdtb-label { font-size: 12px; color: rgba(255,255,255,0.65); }
+.zdtb-sep { width: 1px; height: 28px; background: rgba(255,255,255,0.18); margin: 0 2px; }
+.zone-draw-btn { border: none; border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.zone-draw-btn-finish { background: var(--go-green); color: #fff; }
+.zone-draw-btn-finish:disabled { opacity: 0.45; cursor: default; }
+.zone-draw-btn-cancel { background: rgba(255,255,255,0.15); color: #fff; }
+.zone-draw-btn-undo { background: rgba(255,255,255,0.15); color: #fff; font-size: 16px; padding: 8px 12px; }
+/* В режиме рисования — скрываем backdrop чтобы карта была кликабельна */
+body.zone-drawing .backdrop { display: none !important; }
+
+/* Баннер: один из файлов с данными (gis-control-data.js / repair-works-data.js)
+   не загрузился — без него секция просто выглядит пустой, без единой ошибки. */
+#data-load-warning {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 5000;
+  background: #c0392b; color: #fff; padding: 10px 44px 10px 14px; font-size: 12.5px; line-height: 1.45;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+#data-load-warning.hidden { display: none; }
+#data-load-warning .data-load-warning-close {
+  position: absolute; top: 6px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,.18); color: #fff; font-size: 13px; cursor: pointer;
+}
+/* Неинтерактивные названия микрорайонов/кварталов (без задника и обводок, с подложкой текста) */
+.microrayon-label { background: transparent !important; border: none !important; box-shadow: none !important; }
+.microrayon-label span {
+  display: inline-block; white-space: nowrap; font: 800 13px/1.2 var(--font-display);
+  color: #0E5C4F; pointer-events: none; transform: translate(-50%, -50%);
+  text-shadow: 0 1px 2px #fff, 0 0 5px #fff, 0 0 8px #fff;
+}
+.microrayon-labels-hidden .microrayon-label { display: none !important; }
+
+.rvr-point-label {
+  background: rgba(255,255,255,.94) !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18) !important;
+  padding: 2px 7px !important;
+  font: 700 11.5px/1.3 var(--font-display, inherit);
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+.rvr-point-label::before { display: none !important; }
+
+.rvr-task-filter-menu { position: absolute; top: calc(100% + 6px); right: 0; background: #fff; border: 1px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; min-width: 220px; z-index: 1200; }
+.rvr-task-filter-menu.hidden { display: none; }
+.rvr-task-filter-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.rvr-task-filter-item:hover { background: var(--surface-deep); }
+.rvr-task-filter-item.active { background: #2fae56; color: #fff; }
+.rvr-task-filter-count { font-size: 11.5px; opacity: .7; }
+.rvr-task-filter-clear { border-top: 1px solid rgba(0,0,0,.1); margin-top: 4px; padding-top: 8px; color: #b3372c; text-align:center; font-weight:600; }
+
+/* Модальное окно копирования адресов */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 4000;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: auto; display: flex !important; }
+.modal-box {
+  background: #fff; width: 100%; max-width: 520px; border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;
+  max-height: 85vh; animation: modal-pop 0.25s ease-out;
+}
+@keyframes modal-pop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.modal-header {
+  padding: 14px 18px; background: var(--surface-deep, #f4f5f7);
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--line, #e1e4e8);
+}
+.modal-title { font-size: 15px; font-weight: 800; color: var(--ink, #1c2526); margin: 0; }
+.modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="data-load-warning" class="hidden">
+  <span class="data-load-warning-text"></span>
+  <button class="data-load-warning-close" type="button" onclick="document.getElementById('data-load-warning').classList.add('hidden')" title="Закрыть">✕</button>
+</div>
+<noscript><div style="padding:40px;text-align:center;font-family:sans-serif;">Для работы карты нужен включённый JavaScript.</div></noscript>
+
+<div id="map"></div>
+
+<button id="route-btn" class="route-btn" title="Построить маршрут">🧭</button>
+
+<div id="route-panel" class="route-panel hidden">
+  <div class="route-panel-header">
+    <span id="route-panel-title">Маршрут</span>
+    <button type="button" id="route-panel-close" title="Закрыть">✕</button>
+  </div>
+  <div class="route-panel-field">
+    <input type="text" id="route-from-input" placeholder="Откуда" autocomplete="off">
+    <button type="button" id="route-from-geo" title="Моё местоположение">📍</button>
+    <button type="button" id="route-from-show" title="Показать на карте">👁</button>
+  </div>
+  <div class="route-panel-field">
+    <input type="text" id="route-to-input" placeholder="Куда" autocomplete="off">
+    <button type="button" id="route-to-show" title="Показать на карте">👁</button>
+  </div>
+  <div class="route-panel-profiles">
+    <button type="button" class="route-profile-btn active" id="route-profile-driving" data-profile="driving">🚗 Авто</button>
+    <button type="button" class="route-profile-btn" id="route-profile-foot" data-profile="foot">🚶 Пешком</button>
+  </div>
+  <button type="button" id="route-build-btn" class="route-build-btn">Проложить маршрут</button>
+</div>
+
+<div id="route-info" class="route-info hidden">
+  <span id="route-info-text"></span>
+  <button type="button" id="route-info-close" title="Убрать маршрут">✕</button>
+</div>
+
+<div class="topbar">
+  <div class="search-wrap">
+    <input type="search" id="search-input" placeholder="Адрес, ТЦ или координаты" autocomplete="off">
+    <div id="search-suggestions" class="search-suggestions hidden"></div>
+  </div>
+  <button class="icon-btn search-btn" id="search-btn" title="Найти">🔍</button>
+  <button class="icon-btn" id="locate-btn" title="Моё местоположение">🎯</button>
+  <button class="icon-btn" id="history-btn" title="История вывоза">📋<span class="badge" id="history-badge">0</span></button>
+  <div id="rvr-task-filter-wrap" style="position:relative; display:none;">
+    <button class="icon-btn" id="rvr-task-filter-btn" title="Фильтр по видам работ">🟢</button>
+    <div id="rvr-task-filter-menu" class="rvr-task-filter-menu hidden"></div>
+  </div>
+  <button class="icon-btn" id="lang-btn" title="Язык / Тіл" style="font-size:12px; font-weight:800; color:var(--brand);">ҚАЗ</button>
+  <button class="icon-btn" id="admin-btn" title="Вход администратора">🔒</button>
+</div>
+
+<nav class="section-switcher" aria-label="Разделы карты">
+  <button class="section-tab active" type="button" data-section="gis">ГИС-контроль</button>
+  <button class="section-tab" type="button" data-section="repair">Ремонтные работы</button>
+</nav>
+
+<!-- Тулбар рисования зоны (поверх карты) -->
+<div class="zone-draw-toolbar" id="zone-draw-toolbar">
+  <div style="display:flex;flex-direction:column;align-items:center">
+    <div class="zdtb-count" id="zdtb-count">0</div>
+    <div class="zdtb-label">вершин</div>
+  </div>
+  <div class="zdtb-sep"></div>
+  <button class="zone-draw-btn zone-draw-btn-undo" onclick="zoneDrawUndo()" title="Отменить последнюю вершину">↩</button>
+  <button class="zone-draw-btn zone-draw-btn-cancel" onclick="cancelZoneDraw()">Отмена</button>
+  <button class="zone-draw-btn zone-draw-btn-finish" id="zdtb-finish" onclick="finishZoneDraw()" disabled>✓ Готово</button>
+</div>
+
+<div id="zone-legend" class="zone-legend hidden"></div>
+
+<!-- Новая кнопка и плашка инфо об авторах -->
+<button id="info-btn-circle" class="info-btn-circle" title="Информация об авторах">i</button>
+<div id="info-panel-box" class="info-panel-box hidden">
+  <div class="author-block">
+    <div><b>Авторы карты:</b></div>
+    <div class="author-line">Шутов Богдан — <a href="tel:+77052486193">+7 705 248 61 93</a></div>
+    <div class="author-line">Лунгу Альберт — <a href="tel:+77087101304">+7 708 710 13 04</a></div>
+    <div class="author-line">Бородкин Владимир — <a href="tel:+77082548363">+7 708 254 83 63</a></div>
+  </div>
+  <button class="close-btn" id="info-close-btn" title="Закрыть">✕</button>
+</div>
+
+<div id="backdrop" class="backdrop"></div>
+<div id="panel" class="panel">
+  <div class="panel-header">
+    <h3 id="panel-title"></h3>
+    <button class="icon-btn" id="panel-close-btn" title="Закрыть">✕</button>
+  </div>
+  <div id="panel-body" class="panel-body"></div>
+</div>
+
+<div id="feature-line-svg-wrap">
+  <svg id="feature-line-svg">
+    <line id="feature-line-outline" x1="0" y1="0" x2="0" y2="0" stroke="rgba(214,67,46,.18)" stroke-width="8" stroke-linecap="round"/>
+    <line id="feature-line" x1="0" y1="0" x2="0" y2="0" stroke="#D6432E" stroke-width="3" stroke-linecap="round"/>
+    <circle id="feature-line-dot-outline" cx="0" cy="0" r="9" fill="#ffffff"/>
+    <circle id="feature-line-dot" cx="0" cy="0" r="6.5" fill="#D6432E" stroke="#fff" stroke-width="2"/>
+  </svg>
+</div>
+<div id="feature-card" class="feature-card hidden">
+  <div class="feature-card-drag" id="feature-card-drag">
+    <div class="feature-card-title" id="feature-card-title"></div>
+    <button class="feature-card-close" id="feature-card-close" type="button" title="Закрыть">✕</button>
+  </div>
+  <div class="feature-card-body" id="feature-card-body"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Окно для просмотра и копирования списка адресов -->
+<div id="addr-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="addr-modal-title" class="modal-title">Скопировать адреса</h3>
+      <button class="icon-btn" onclick="closeAddressCopyModal()" title="Закрыть">✕</button>
+    </div>
+    <div class="modal-body">
+      <textarea id="addr-modal-text" class="field-input" rows="12" readonly style="font-family:var(--font-mono, monospace); font-size:13px; line-height:1.4; resize:vertical; padding:10px; border-radius:8px;"></textarea>
+      <div class="modal-actions" style="display:flex; gap:10px; margin-top:4px;">
+        <button class="btn btn-primary" style="flex:1; padding:11px; font-weight:700;" onclick="copyAddressModalText()">📋 Скопировать в буфер</button>
+        <button class="btn btn-secondary" style="padding:11px 18px;" onclick="closeAddressCopyModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-mark">🗺️</div>
+  <div class="loading-title">Чистый Темиртау</div>
+  <div class="loading-sub">Авторы: Лунгу Альберт, Шутов Богдан, Бородкин Владимир</div>
+  <div class="loading-spinner"></div>
+</div>
+
+<script>
+// ============================================================
+// НАСТРОЙКА FIREBASE — данные проекта temirtau-trash-map
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCI3pGs2-zdQFPEJXFS1OVDfnElPKo2l-Q",
+  authDomain: "mapb-a3590.firebaseapp.com",
+  projectId: "mapb-a3590",
+  storageBucket: "mapb-a3590.firebasestorage.app",
+  messagingSenderId: "149350634289",
+  appId: "1:149350634289:web:fff14816c5bde28f499610",
+  measurementId: "G-0JW5XRDZLT"
+};
+
+let db = null;
+let FIRESTORE_AVAILABLE = false;
+let STORAGE_BUCKET_AVAILABLE = false;
+
+function initFirebase() {
+  try {
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('ВАШ_') === 0) { return; }
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    FIRESTORE_AVAILABLE = true;
+    try { firebase.analytics(); } catch (analyticsErr) { console.warn('Firebase Analytics не подключилась:', analyticsErr); }
+  } catch (err) {
+    console.error('Ошибка инициализации Firebase:', err);
+    return;
+  }
+  try {
+    firebase.storage();
+    STORAGE_BUCKET_AVAILABLE = true;
+  } catch (err) {
+    console.error('Firebase Storage недоступен:', err);
+    STORAGE_BUCKET_AVAILABLE = false;
+  }
+}
+
+// ===== Контроль доступа к кнопкам =====
+const domObserver = new MutationObserver(() => checkAdminVisibility());
+
+function checkAdminVisibility() {
+  document.querySelectorAll('button').forEach(btn => {
+    const text = btn.textContent.toLowerCase();
+    if (text.includes('удали') || text.includes('редактир')) {
+      btn.style.display = isAdmin ? '' : 'none';
+    }
+  });
+}
+
+// ===== Константы и состояние =====
+const TEMIRTAU_CENTER = [50.0546, 72.9647];
+const DEFAULT_ZOOM = 13;
+const MAX_MEDIA_BYTES = 600000;
+
+let map;
+let pointsLayer;
+let houseNumbersLayer;
+let landmarksLayer;
+let footpathsLayer;
+let streetsLayer;
+const FOOTPATHS_MIN_ZOOM = 17;
+const STREET_MIN_ZOOM = 14;
+let houseNumUpdateTimer = null;
+const HOUSE_NUM_MIN_ZOOM = 17;
+const LANDMARK_MIN_ZOOM = 15;
+
+const LANDMARK_STYLES = {
+  mall:    { color: '#E08A2E' },
+  health:  { color: '#D6432E' },
+  edu:     { color: '#7C5CBF' },
+  park:    { color: '#2E9A5C' },
+  culture: { color: '#C2528C' }
+};
+let draftMarker = null;
+let searchLayer = null; // Для сохранения полигона или точки при поиске
+let userLocationMarker = null;
+let userAccuracyCircle = null;
+let deviceHeadingHandler = null;
+let userHeadingSupported = false;
+let allPoints = [];
+let myName = '';
+let panelType = null;
+let currentDraftData = null;
+let selectedPhotoDataUrl = null;
+let firstSnapshotReceived = false;
+
+// Состояния для записи видео
+let mediaRecorder = null;
+let cameraStream = null;
+let recordTimer = null;
+let recordedVideoBase64 = null;
+let recordedVideoObjectUrl = null;
+let storedVideoObjectUrl = null;
+let isAdmin = false;
+
+// ===== Инициализация =====
+function init() {
+  initMap();
+  buildSearchIndex();
+  initAdmin();
+
+  // Восстановление последней открытой карты (секции). Раздела "Вывоз мусора"
+  // больше нет — если у кого-то в localStorage с прошлого раза осталось
+  // 'trash', сводим к ГИС-контролю.
+  let savedSection = localStorage.getItem('trash-map-section') || 'gis';
+  if (savedSection === 'trash') savedSection = 'gis';
+  document.body.setAttribute('data-section', savedSection);
+  document.querySelectorAll('.section-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.section === savedSection);
+  });
+
+  bindUI();
+  loadMyName();
+  initFirebase();
+
+  // Подписка на живые данные из Firestore — без этого точки сохраняются
+  // в базу, но никому (включая автора) не показываются на карте.
+  if (FIRESTORE_AVAILABLE) {
+    attachPointsListener();
+  }
+
+  // Восстановление постоянного отслеживания геолокации
+  if (localStorage.getItem('trash-map-tracking') === 'true') {
+     handleLocateMe();
+  }
+
+  domObserver.observe(document.body, { childList: true, subtree: true });
+  checkAdminVisibility();
+
+  // Раздела "Вывоз мусора" больше нет — карта не завязана на подписку
+  // Firestore для точек сбора, поэтому показываем её сразу, без ожидания.
+  hideLoadingOverlay();
+  if (!FIRESTORE_AVAILABLE) {
+    showToast('База данных не подключена — правки сохраняются только у вас в браузере');
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('loading-overlay');
+  el.classList.add('hide');
+  setTimeout(() => { el.style.display = 'none'; }, 350);
+}
+
+function attachPointsListener(onFirstLoad) {
+  db.collection('points').onSnapshot((snapshot) => {
+    allPoints = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+    if (panelType !== 'add' && panelType !== 'collect') renderActiveMarkers();
+    updateHistoryBadge();
+    if (panelType === 'history') renderHistoryPanel(getSortedCollected());
+    if (!firstSnapshotReceived) { firstSnapshotReceived = true; if (onFirstLoad) onFirstLoad(); }
+  }, (err) => {
+    console.error('Firestore onSnapshot error:', err);
+    showToast('Нет связи с общей базой — проверьте интернет или настройки Firebase');
+    if (!firstSnapshotReceived) { firstSnapshotReceived = true; if (onFirstLoad) onFirstLoad(); }
+  });
+}
+
+function getSortedCollected() {
+  return allPoints.filter(p => p.status === 'collected')
+    .sort((a, b) => new Date(b.collectedAt) - new Date(a.collectedAt));
+}
+
+// ===== Авторизация Админа =====
+function initAdmin() {
+  isAdmin = localStorage.getItem('trash-map-admin') === 'true';
+  updateAdminUI();
+}
+
+function updateAdminUI() {
+  const btn = document.getElementById('admin-btn');
+  if (btn) {
+    btn.textContent = isAdmin ? '🔓' : '🔒';
+    btn.title = isAdmin ? 'Выйти из режима администратора' : 'Вход администратора';
+  }
+  
+  if (isAdmin) {
+    document.body.classList.add('admin-mode');
+  } else {
+    document.body.classList.remove('admin-mode');
+  }
+  checkAdminVisibility();
+}
+
+function handleAdminAuth() {
+  if (isAdmin) {
+    if (confirm('Выйти из режима администратора?')) {
+      isAdmin = false;
+      localStorage.removeItem('trash-map-admin');
+      updateAdminUI();
+      showToast('Вы перешли в гостевой режим');
+      if (panelType === 'detail') closePanel();
+    }
+  } else {
+    const pass = prompt('Введите пароль администратора:');
+    if (pass === '050505') {
+      isAdmin = true;
+      localStorage.setItem('trash-map-admin', 'true');
+      updateAdminUI();
+      showToast('Режим администратора активирован');
+      if (panelType === 'detail') closePanel();
+    } else if (pass !== null) {
+      showToast('Неверный пароль');
+    }
+  }
+}
+
+// ===== Карта =====
+function initMap() {
+  map = L.map('map', { zoomControl: false, maxZoom: 26, rotate: true, touchRotate: true, rotateControl: { closeOnSelect: false } }).setView(TEMIRTAU_CENTER, DEFAULT_ZOOM);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  // Пока карту двигают/крутят/зумят — метка направления "замирает" и не обновляется,
+  // как только жест закончился — досчитываем актуальный курс (см. onMapGestureActivity).
+  map.on('movestart move moveend zoomstart zoom zoomend dragstart drag dragend rotatestart rotate rotateend', onMapGestureActivity);
+  map.on('rotate', renderUserHeadingLive);
+
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxNativeZoom: 17,
+    maxZoom: 26,
+    attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    maxNativeZoom: 17,
+    maxZoom: 26
+  }).addTo(map);
+
+  pointsLayer = L.layerGroup().addTo(map);
+  houseNumbersLayer = L.layerGroup().addTo(map);
+  landmarksLayer = L.layerGroup().addTo(map);
+  footpathsLayer = L.layerGroup().addTo(map);
+  streetsLayer = L.layerGroup().addTo(map);
+  map.on('click', onMapClick);
+  map.on('moveend zoomend', scheduleHouseNumbersUpdate);
+  renderHouseNumbers();
+  renderLandmarks();
+  renderFootpaths();
+  renderStreets();
+}
+
+// ===== Номера домов =====
+const HOUSE_NUM_MAX_MARKERS = 450; // защита от лагов в плотных кварталах на слабых телефонах
+function scheduleHouseNumbersUpdate() {
+  if (houseNumUpdateTimer) clearTimeout(houseNumUpdateTimer);
+  houseNumUpdateTimer = setTimeout(() => {
+    renderHouseNumbers();
+    renderLandmarks();
+    renderFootpaths();
+    renderStreets();
+  }, 220);
+}
+
+function renderHouseNumbers() {
+  if (!houseNumbersLayer) return;
+  houseNumbersLayer.clearLayers();
+  if (!window.HOUSE_NUMBERS_DATA || map.getZoom() < HOUSE_NUM_MIN_ZOOM) return;
+
+  const bounds = map.getBounds().pad(0.25);
+  let rendered = 0;
+  for (let i = 0; i < window.HOUSE_NUMBERS_DATA.length; i++) {
+    if (rendered >= HOUSE_NUM_MAX_MARKERS) break;
+    const row = window.HOUSE_NUMBERS_DATA[i];
+    const lat = row[0], lon = row[1], num = row[2];
+    if (!bounds.contains([lat, lon])) continue;
+    const icon = L.divIcon({
+      className: 'house-num-icon',
+      html: `<span class="house-num-label">${num}</span>`,
+      iconSize: null
+    });
+    L.marker([lat, lon], { icon, interactive: false, keyboard: false }).addTo(houseNumbersLayer);
+    rendered++;
+  }
+}
+
+// ===== ТЦ и другие крупные объекты =====
+function renderLandmarks() {
+  if (!landmarksLayer) return;
+  landmarksLayer.clearLayers();
+  if (!window.LANDMARKS_DATA || map.getZoom() < LANDMARK_MIN_ZOOM) return;
+
+  const lang = localStorage.getItem('trash-map-lang') || 'ru';
+  const bounds = map.getBounds().pad(0.3);
+  for (let i = 0; i < window.LANDMARKS_DATA.length; i++) {
+    const row = window.LANDMARKS_DATA[i];
+    const lat = row[0], lon = row[1], nameRu = row[2], nameKk = row[3], cat = row[4];
+    if (!bounds.contains([lat, lon])) continue;
+    const name = lang === 'kk' ? nameKk : nameRu;
+    const style = LANDMARK_STYLES[cat] || LANDMARK_STYLES.mall;
+    const icon = L.divIcon({
+      className: 'house-num-icon',
+      html: `<span class="landmark-marker">
+        <span class="landmark-dot" style="background:${style.color}"></span>
+        <span class="landmark-name">${name}</span>
+      </span>`,
+      iconSize: null
+    });
+    L.marker([lat, lon], { icon, interactive: false, keyboard: false }).addTo(landmarksLayer);
+  }
+}
+window.renderLandmarks = renderLandmarks;
+
+// ===== Пешеходные дорожки (footway/path/track из OSM) =====
+// Чисто визуальный слой-подсказка "тут есть тропинка через двор" — сам
+// маршрутизатор (OSRM) её не всегда использует, см. переписку про это.
+function renderFootpaths() {
+  if (!footpathsLayer) return;
+  footpathsLayer.clearLayers();
+  if (!window.FOOTPATHS_DATA || map.getZoom() < FOOTPATHS_MIN_ZOOM) return;
+
+  const bounds = map.getBounds().pad(0.3);
+  for (let i = 0; i < window.FOOTPATHS_DATA.length; i++) {
+    const line = window.FOOTPATHS_DATA[i];
+    let inView = false;
+    for (let j = 0; j < line.length; j++) {
+      if (bounds.contains(line[j])) { inView = true; break; }
+    }
+    if (!inView) continue;
+    L.polyline(line, {
+      color: '#fff', weight: 3, opacity: 0.8, dashArray: '1, 7', lineCap: 'round', interactive: false
+    }).addTo(footpathsLayer);
+  }
+}
+
+// ===== Названия улиц (подписи вдоль дорог) =====
+function renderStreets() {
+  if (!streetsLayer) return;
+  streetsLayer.clearLayers();
+  if (!window.STREETS_DATA || map.getZoom() < STREET_MIN_ZOOM) return;
+
+  const bounds = map.getBounds().pad(0.3);
+  for (let i = 0; i < window.STREETS_DATA.length; i++) {
+    const row = window.STREETS_DATA[i];
+    const lat = row[0], lon = row[1], name = row[2];
+    if (!bounds.contains([lat, lon])) continue;
+    const icon = L.divIcon({
+      className: 'house-num-icon',
+      html: `<span class="street-label">${name}</span>`,
+      iconSize: null
+    });
+    L.marker([lat, lon], { icon, interactive: false, keyboard: false }).addTo(streetsLayer);
+  }
+}
+
+function bindTransientPopup(marker, html) {
+  marker.bindPopup(html).openPopup();
+  marker.on('popupclose', function () {
+    if (map.hasLayer(this)) map.removeLayer(this);
+  });
+  return marker;
+}
+
+function pinIcon(color) {
+  const colors = { red: '#D6432E', orange: '#E08A2E', blue: '#2C74B3' };
+  const fill = colors[color] || color;
+  return L.divIcon({
+    className: 'custom-pin',
+    html: `<svg width="30" height="42" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg">
+      <path d="M15 0C6.7 0 0 6.7 0 15c0 11.25 15 27 15 27s15-15.75 15-27C30 6.7 23.3 0 15 0z" fill="${fill}" stroke="#ffffff" stroke-width="1.5"/>
+      <circle cx="15" cy="15" r="6" fill="#ffffff"/>
+    </svg>`,
+    iconSize: [30, 42],
+    iconAnchor: [15, 42],
+    popupAnchor: [0, -36]
+  });
+}
+
+function renderActiveMarkers() {
+  pointsLayer.clearLayers();
+  allPoints.filter(p => p.status === 'active').forEach(p => {
+    const marker = L.marker([p.lat, p.lon], { icon: pinIcon('red') });
+    marker.on('click', () => openPointDetail(p.id));
+    marker.addTo(pointsLayer);
+  });
+}
+
+// ===== Черновик точки (клик) =====
+function onMapClick(e) {
+  const section = document.body.getAttribute('data-section') || 'gis';
+  if (!isAdmin && section !== 'trash') {
+    showToast('Добавление точек доступно только администраторам');
+    return;
+  }
+  placeDraft(e.latlng.lat, e.latlng.lng, null);
+}
+
+async function placeDraft(lat, lon, knownAddress) {
+  removeDraft();
+  const myMarker = L.marker([lat, lon], { icon: pinIcon('orange') }).addTo(map);
+  draftMarker = myMarker;
+
+  let address = knownAddress;
+  if (!address) {
+    myMarker.bindPopup(`<div class="popup-address">Определяем адрес…</div>`).openPopup();
+    address = await reverseGeocode(lat, lon);
+  }
+  address = address || 'Адрес не определён';
+
+  if (draftMarker !== myMarker) return;
+
+  myMarker._draftData = { lat, lon, address };
+  const popupHtml = `
+    <div class="popup-address">${escapeHtml(address)}</div>
+    <div class="popup-coords">${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
+    <button class="popup-btn" onclick="confirmAddDraft()">➕ Добавить точку</button>`;
+  myMarker.bindPopup(popupHtml).openPopup();
+}
+
+function removeDraft() {
+  if (draftMarker) { map.removeLayer(draftMarker); draftMarker = null; }
+  if (searchLayer) { map.removeLayer(searchLayer); searchLayer = null; }
+}
+
+function confirmAddDraft() {
+  if (!draftMarker || !draftMarker._draftData) return;
+  draftMarker.closePopup();
+  openPanel('add', draftMarker._draftData);
+}
+
+// ===== Умный Поиск (адрес или координаты) =====
+let highlightedLayers = [];
+
+function clearHighlights() {
+  highlightedLayers.forEach(layer => {
+    if (layer.setStyle && layer._origStyle) {
+      layer.setStyle(layer._origStyle);
+    }
+  });
+  highlightedLayers = [];
+}
+
+// ===== Локальный поиск: индекс из домов + ТЦ/объектов =====
+// Строим один раз при старте из HOUSE_NUMBERS_DATA (7000 адресов) и LANDMARKS_DATA (ТЦ и т.п.)
+let SEARCH_INDEX = [];
+const LANDMARK_SEARCH_ICONS = { mall: '🛍️', health: '🏥', edu: '🎓', park: '🌳', culture: '🎭' };
+
+function normalizeSearchText(s) {
+  return s.toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[ао]/g, 'а')
+    .replace(/[еи]/g, 'и')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/[^a-zа-я0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildSearchIndex() {
+  SEARCH_INDEX = [];
+  if (window.HOUSE_NUMBERS_DATA) {
+    for (const row of window.HOUSE_NUMBERS_DATA) {
+      const lat = row[0], lon = row[1], num = row[2], street = row[3];
+      if (!street) continue;
+      const label = `${street}, ${num}`;
+      SEARCH_INDEX.push({ type: 'address', lat, lon, label, norm: normalizeSearchText(label) });
+    }
+  }
+  if (window.LANDMARKS_DATA) {
+    for (const row of window.LANDMARKS_DATA) {
+      const lat = row[0], lon = row[1], nameRu = row[2], nameKk = row[3], cat = row[4];
+      SEARCH_INDEX.push({
+        type: 'landmark', lat, lon, label: nameRu, labelKk: nameKk, cat,
+        norm: normalizeSearchText(nameRu), normKk: normalizeSearchText(nameKk)
+      });
+    }
+  }
+}
+
+function searchLocalIndex(query, limit) {
+  const qNorm = normalizeSearchText(query);
+  const qTerms = qNorm.split(' ').filter(Boolean);
+  if (!qTerms.length) return [];
+  const scored = [];
+  for (const item of SEARCH_INDEX) {
+    const norm = item.type === 'landmark' && item.normKk && item.normKk.includes(qTerms[0]) ? item.normKk : item.norm;
+    let ok = true;
+    for (const t of qTerms) { if (!norm.includes(t)) { ok = false; break; } }
+    if (!ok) continue;
+    let score = norm.startsWith(qTerms[0]) ? 0 : 1;
+    if (item.type === 'landmark') score -= 0.5; // ТЦ/объекты чуть выше в выдаче
+    score += norm.length * 0.001;
+    scored.push({ item, score });
+  }
+  scored.sort((a, b) => a.score - b.score);
+  return scored.slice(0, limit || 8).map(s => s.item);
+}
+
+function updateSearchSuggestions(query) {
+  const box = document.getElementById('search-suggestions');
+  const q = query.trim();
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const results = searchLocalIndex(q, 6);
+  if (!results.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const lang = localStorage.getItem('trash-map-lang') || 'ru';
+  box.innerHTML = results.map((r) => {
+    const icon = r.type === 'address' ? '🏠' : (LANDMARK_SEARCH_ICONS[r.cat] || '📍');
+    const label = (r.type === 'landmark' && lang === 'kk') ? r.labelKk : r.label;
+    const sub = r.type === 'address' ? 'Дом' : 'Объект';
+    return `<div class="search-suggestion-item"><span class="search-suggestion-icon">${icon}</span><span class="search-suggestion-label">${escapeHtml(label)}</span><span class="search-suggestion-sub">${sub}</span></div>`;
+  }).join('');
+  box.classList.remove('hidden');
+  [...box.children].forEach((el, i) => {
+    el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      goToSearchResult(results[i]);
+    });
+  });
+}
+
+function hideSearchSuggestions() {
+  const box = document.getElementById('search-suggestions');
+  box.classList.add('hidden');
+  box.innerHTML = '';
+}
+
+function goToSearchResult(r) {
+  hideSearchSuggestions();
+  const lang = localStorage.getItem('trash-map-lang') || 'ru';
+  const label = (r.type === 'landmark' && lang === 'kk') ? r.labelKk : r.label;
+  document.getElementById('search-input').value = label;
+  if (searchLayer) { map.removeLayer(searchLayer); searchLayer = null; }
+  map.setView([r.lat, r.lon], r.type === 'address' ? 18 : 17);
+  searchLayer = L.marker([r.lat, r.lon], { icon: pinIcon('blue') }).addTo(map);
+  const popupHtml = `
+    <div class="popup-address">${escapeHtml(label)}</div>
+    <button class="popup-btn" onclick="openRoutePanelTo(${r.lat}, ${r.lon}, '${escapeHtml(label).replace(/'/g, "\\'")}')">🧭 Маршрут</button>
+    ${window.findNearbyFeature ? buildOpenCardButtonHtml(r.lat, r.lon) : ''}`;
+  bindTransientPopup(searchLayer, popupHtml);
+}
+
+// ===== Открыть карточку реестра рядом (для ГИС-контроль/Ремонтные работы) =====
+function buildOpenCardButtonHtml(lat, lon) {
+  if (!window.findNearbyFeature) return '';
+  const feat = window.findNearbyFeature(lat, lon);
+  if (!feat) return '';
+  return `<button class="popup-btn" onclick="window.openFeatureCard('${feat.id}')">📋 Открыть карточку</button>`;
+}
+
+// ===== Маршрут (OSRM, бесплатно, без ключа) =====
+let routeLayer = null;
+let routeFromMarker = null;
+let routeToMarker = null;
+let routeFromCoords = null;
+let routeToCoords = null;
+
+// Если слежение за геолокацией уже включено — берём последнюю известную точку
+// сразу (она у нас уже точно рабочая, раз на карте видна синяя точка).
+// Иначе делаем свежий запрос, но мягче: без строгой высокой точности и с
+// допуском на кэшированную ОС-позицию — это устраняет фолс-негативы таймаута.
+function getCurrentPositionPromise() {
+  return new Promise((resolve, reject) => {
+    if (geoWatchId !== null && userLocationMarker) {
+      const ll = userLocationMarker.getLatLng();
+      resolve({ latitude: ll.lat, longitude: ll.lng });
+      return;
+    }
+    if (!navigator.geolocation) { reject(new Error('geo unsupported')); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos.coords),
+      (err) => reject(err),
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+    );
+  });
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+window.haversineMeters = haversineMeters;
+
+// Находит ближайший локальный адрес из индекса домов (для клика по карте)
+function findNearestLocalAddress(lat, lon, maxMeters) {
+  let best = null, bestDist = Infinity;
+  for (const item of SEARCH_INDEX) {
+    if (item.type !== 'address') continue;
+    const d = haversineMeters(lat, lon, item.lat, item.lon);
+    if (d < bestDist) { bestDist = d; best = item; }
+  }
+  return (best && bestDist <= maxMeters) ? best : null;
+}
+
+// Резолвит текст (адрес/ТЦ/координаты) в точку — используется полями "откуда"/"куда"
+async function resolveAddressText(text) {
+  const q = (text || '').trim();
+  if (!q) return null;
+  const coordMatch = q.match(/^(-?\d{1,3}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)$/);
+  if (coordMatch) {
+    return { lat: parseFloat(coordMatch[1]), lon: parseFloat(coordMatch[2]), label: q };
+  }
+  const local = searchLocalIndex(q, 1);
+  if (local.length) {
+    const r = local[0];
+    const lang = localStorage.getItem('trash-map-lang') || 'ru';
+    const label = (r.type === 'landmark' && lang === 'kk') ? r.labelKk : r.label;
+    return { lat: r.lat, lon: r.lon, label };
+  }
+  try {
+    const results = await geocode(q);
+    if (results.length) return { lat: results[0].lat, lon: results[0].lon, label: results[0].displayName };
+  } catch (err) { /* игнор, вернём null ниже */ }
+  return null;
+}
+
+function clearRouteLine() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  document.getElementById('route-info').classList.add('hidden');
+}
+
+function clearRoute() {
+  clearRouteLine();
+  if (routeFromMarker) { map.removeLayer(routeFromMarker); routeFromMarker = null; }
+  if (routeToMarker) { map.removeLayer(routeToMarker); routeToMarker = null; }
+  routeFromCoords = null;
+  routeToCoords = null;
+}
+
+let routeProfile = 'driving';
+
+// Личный бесплатный ключ ORS (openrouteservice / HeiGIT). Внимание: используется
+// на клиенте, что формально против их ToS (ключ виден в devtools) — сознательное
+// решение ради простоты, лимит 2000 запросов/день. Если когда-то станет проблемой —
+// нужен прокси (Cloudflare Worker и т.п.), чтобы спрятать ключ.
+const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFmZTRhZTEwNDY3MzRiMzZhMWE4ODBhMGNlMGM3YzY0IiwiaCI6Im11cm11cjY0In0=';
+const ORS_PROFILE_MAP = { driving: 'driving-car', foot: 'foot-walking' };
+
+async function buildRoute(fromLat, fromLon, toLat, toLon, destLabel, profile) {
+  profile = profile || routeProfile;
+  showToast(profile === 'foot' ? 'Строим пеший маршрут…' : 'Строим маршрут…');
+
+  // 1. ORS — реально различает пеший/авто (в отличие от OSRM для нашего региона)
+  try {
+    const orsProfile = ORS_PROFILE_MAP[profile] || 'driving-car';
+    const orsUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${ORS_API_KEY}&start=${fromLon},${fromLat}&end=${toLon},${toLat}`;
+    const orsRes = await fetch(orsUrl);
+    if (orsRes.ok) {
+      const orsData = await orsRes.json();
+      const feature = orsData.features && orsData.features[0];
+      const segment = feature && feature.properties && feature.properties.segments && feature.properties.segments[0];
+      if (feature && segment) {
+        clearRouteLine();
+        routeLayer = L.geoJSON(feature.geometry, { style: { color: '#2C74B3', weight: 5, opacity: 0.85 } }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), { padding: [50, 70] });
+
+        const km = (segment.distance / 1000).toFixed(1);
+        const min = Math.round(segment.duration / 60);
+        document.getElementById('route-info-text').textContent =
+          `🧭 ${destLabel ? destLabel + ' — ' : ''}${km} км · ${min} мин`;
+        document.getElementById('route-info').classList.remove('hidden');
+        return;
+      }
+    }
+    // Если лимит запросов исчерпан или сервис недоступен — падаем на запасной OSRM ниже
+  } catch (err) { /* тихо уходим на фоллбэк */ }
+
+  // 2. Фоллбэк — OSRM (без ключа, но профили car/foot тут не всегда различаются)
+  try {
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('routing failed: ' + res.status);
+    const data = await res.json();
+    if (!data.routes || !data.routes.length) { showToast('Маршрут не найден'); return; }
+
+    const route = data.routes[0];
+    clearRouteLine();
+    routeLayer = L.geoJSON(route.geometry, { style: { color: '#2C74B3', weight: 5, opacity: 0.85 } }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [50, 70] });
+
+    const km = (route.distance / 1000).toFixed(1);
+    const min = Math.round(route.duration / 60);
+    document.getElementById('route-info-text').textContent =
+      `🧭 ${destLabel ? destLabel + ' — ' : ''}${km} км · ${min} мин`;
+    document.getElementById('route-info').classList.remove('hidden');
+  } catch (err) {
+    showToast('Не удалось построить маршрут. Проверьте интернет-соединение');
+  }
+}
+
+// Быстрая кнопка "Маршрут" из попапа — открывает панель, "куда" уже заполнено и отмечено на карте
+function openRoutePanelTo(lat, lon, label) {
+  routeToCoords = { lat, lon, label };
+  if (routeToMarker) { map.removeLayer(routeToMarker); routeToMarker = null; }
+  routeToMarker = L.marker([lat, lon], { icon: pinIcon('red') }).addTo(map);
+  document.getElementById('route-panel').classList.remove('hidden');
+  document.getElementById('route-to-input').value = label;
+  if (!document.getElementById('route-from-input').value) {
+    document.getElementById('route-from-input').focus();
+  }
+}
+
+function closeRoutePanel() {
+  document.getElementById('route-panel').classList.add('hidden');
+  // Если маршрут ещё не построен (плашка результата скрыта) — это была просто
+  // предпросмотр-точка, её надо убрать, иначе останется висеть навсегда.
+  const routeBuilt = !document.getElementById('route-info').classList.contains('hidden');
+  if (!routeBuilt) {
+    if (routeFromMarker) { map.removeLayer(routeFromMarker); routeFromMarker = null; }
+    if (routeToMarker) { map.removeLayer(routeToMarker); routeToMarker = null; }
+    routeFromCoords = null;
+    routeToCoords = null;
+  }
+}
+
+function openRoutePanelBlank() {
+  document.getElementById('route-panel').classList.remove('hidden');
+  document.getElementById('route-from-input').focus();
+}
+
+async function handleRouteFromGeo() {
+  showToast('Определяем местоположение…');
+  try {
+    const coords = await getCurrentPositionPromise();
+    routeFromCoords = { lat: coords.latitude, lon: coords.longitude, label: 'Моё местоположение' };
+    document.getElementById('route-from-input').value = 'Моё местоположение';
+    showToast('Точка «откуда» заполнена');
+  } catch (err) {
+    showToast('Не удалось определить местоположение. Разрешите доступ к геолокации');
+  }
+}
+
+async function handleRouteShow(which) {
+  const inputId = which === 'from' ? 'route-from-input' : 'route-to-input';
+  const text = document.getElementById(inputId).value;
+  const cached = which === 'from' ? routeFromCoords : routeToCoords;
+  const resolved = (cached && cached.label === text) ? cached : await resolveAddressText(text);
+  if (!resolved) { showToast('Не удалось найти этот адрес'); return; }
+
+  if (which === 'from') {
+    routeFromCoords = resolved;
+    if (routeFromMarker) map.removeLayer(routeFromMarker);
+    routeFromMarker = L.marker([resolved.lat, resolved.lon], { icon: pinIcon('green') }).addTo(map);
+  } else {
+    routeToCoords = resolved;
+    if (routeToMarker) map.removeLayer(routeToMarker);
+    routeToMarker = L.marker([resolved.lat, resolved.lon], { icon: pinIcon('red') }).addTo(map);
+  }
+  map.setView([resolved.lat, resolved.lon], 16);
+}
+
+async function handleRouteBuild() {
+  const fromText = document.getElementById('route-from-input').value;
+  const toText = document.getElementById('route-to-input').value;
+  if (!fromText.trim() || !toText.trim()) { showToast('Заполните обе точки — откуда и куда'); return; }
+
+  showToast('Ищем адреса…');
+  const from = (routeFromCoords && routeFromCoords.label === fromText) ? routeFromCoords : await resolveAddressText(fromText);
+  const to = (routeToCoords && routeToCoords.label === toText) ? routeToCoords : await resolveAddressText(toText);
+  if (!from) { showToast('Не удалось найти адрес отправления'); return; }
+  if (!to) { showToast('Не удалось найти адрес назначения'); return; }
+  routeFromCoords = from; routeToCoords = to;
+
+  if (routeFromMarker) map.removeLayer(routeFromMarker);
+  routeFromMarker = L.marker([from.lat, from.lon], { icon: pinIcon('green') }).addTo(map);
+  if (routeToMarker) map.removeLayer(routeToMarker);
+  routeToMarker = L.marker([to.lat, to.lon], { icon: pinIcon('red') }).addTo(map);
+
+  await buildRoute(from.lat, from.lon, to.lat, to.lon, to.label);
+}
+
+// Клик по карте в разделах ГИС-контроль/Ремонтные работы — показываем инфо по адресу
+async function handleRegistryMapClick(latlng) {
+  const lat = latlng.lat, lon = latlng.lng;
+  const near = findNearestLocalAddress(lat, lon, 35);
+  if (near) {
+    showRegistryAddressPopup(lat, lon, near.label);
+    return;
+  }
+  showRegistryAddressPopup(lat, lon, 'Определяем адрес…');
+  const address = await reverseGeocode(lat, lon);
+  showRegistryAddressPopup(lat, lon, address || 'Адрес не определён');
+}
+window.handleRegistryMapClick = handleRegistryMapClick;
+
+function showRegistryAddressPopup(lat, lon, label) {
+  if (searchLayer) { map.removeLayer(searchLayer); searchLayer = null; }
+  searchLayer = L.marker([lat, lon], { icon: pinIcon('blue') }).addTo(map);
+  const safeLabel = escapeHtml(label).replace(/'/g, "\\'");
+  const popupHtml = `
+    <div class="popup-address">${escapeHtml(label)}</div>
+    <button class="popup-btn" onclick="openRoutePanelTo(${lat}, ${lon}, '${safeLabel}')">🧭 Маршрут</button>
+    ${buildOpenCardButtonHtml(lat, lon)}`;
+  bindTransientPopup(searchLayer, popupHtml);
+}
+window.showRegistryAddressPopup = showRegistryAddressPopup;
+
+async function handleSearch() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+
+  const section = document.body.getAttribute('data-section') || 'gis';
+
+  // 1. Поиск по координатам
+  const coordMatch = query.match(/^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (coordMatch) {
+    const a = parseFloat(coordMatch[1]);
+    const b = parseFloat(coordMatch[2]);
+    let lat = a, lon = b;
+    if (Math.abs(a) > 60 && Math.abs(b) <= 60) { lat = b; lon = a; }
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showToast('Некорректные координаты'); return; }
+    map.setView([lat, lon], 17);
+    
+    if (!isAdmin && section !== 'trash') {
+      showToast('Поиск выполнен. Добавление точек доступно только администраторам');
+      return;
+    }
+    
+    placeDraft(lat, lon, null);
+    return;
+  }
+
+  setSearchLoading(true);
+  clearHighlights();
+  removeDraft(); // Очищаем старые точки поиска
+
+  // 2. Точный локальный поиск по адресам домов и ТЦ/объектам (быстро, без интернета)
+  const indexMatches = searchLocalIndex(query, 1);
+  if (indexMatches.length > 0) {
+    setSearchLoading(false);
+    goToSearchResult(indexMatches[0]);
+    return;
+  }
+
+  // 3. Умный локальный поиск (по загруженным площадкам текущего раздела)
+  // Алгоритм сглаживания текста (убирает опечатки: е/и, а/о, двойные буквы)
+  const normalize = normalizeSearchText;
+
+  const normTerms = normalize(query).split(' ').filter(t => t.length > 0);
+  const localMatches = [];
+
+  map.eachLayer((layer) => {
+    // Пропускаем системные слои и подложку карты
+    if (layer instanceof L.TileLayer || layer === searchLayer || layer === userLocationMarker || layer === userAccuracyCircle || layer === draftMarker) return;
+    
+    let textToSearch = "";
+    
+    // Вытягиваем текст из свойств GeoJSON
+    if (layer.feature && layer.feature.properties) {
+      textToSearch += JSON.stringify(layer.feature.properties) + " ";
+    }
+    // Вытягиваем текст из всплывающих окон
+    if (layer.getPopup && layer.getPopup()) {
+      const content = layer.getPopup().getContent();
+      if (typeof content === 'string') {
+        textToSearch += content.replace(/<[^>]*>?/gm, ' ') + " ";
+      }
+    }
+    
+    if (textToSearch.trim()) {
+      const normText = normalize(textToSearch);
+      let allMatch = true;
+      
+      for (let term of normTerms) {
+        if (!normText.includes(term)) {
+          allMatch = false;
+          break;
+        }
+      }
+      
+      if (allMatch && normTerms.length > 0) {
+        localMatches.push(layer);
+      }
+    }
+  });
+
+  if (localMatches.length > 0) {
+    setSearchLoading(false);
+    
+    // Фокусируемся на всех найденных объектах
+    const group = L.featureGroup(localMatches);
+    map.fitBounds(group.getBounds(), { padding: [40, 40], maxZoom: 18 });
+    
+    // Подсвечиваем найденные площадки/зоны
+    localMatches.forEach(layer => {
+      if (layer.setStyle) {
+        // Сохраняем оригинальный стиль, если еще не сохраняли
+        if (!layer._origStyle) layer._origStyle = Object.assign({}, layer.options);
+        
+        // Применяем яркий стиль подсветки
+        layer.setStyle({ color: '#D6432E', weight: 5, fillColor: '#E08A2E', fillOpacity: 0.75 });
+        highlightedLayers.push(layer);
+      }
+    });
+    
+    // Если найдена только одна площадка - сразу открываем инфо-окно
+    if (localMatches.length === 1 && localMatches[0].openPopup) {
+      localMatches[0].openPopup();
+    }
+    
+    showToast(`Найдено объектов: ${localMatches.length}`);
+    return; // Завершаем поиск, если нашли локально
+  }
+
+  // 4. Если локально ничего не нашли, ищем через Nominatim (Интернет)
+  try {
+    const results = await geocode(query);
+    if (!results.length) {
+      showToast('Адрес не найден. Проверьте запрос или отметьте точку кликом');
+      return;
+    }
+    
+    const r = results[0];
+
+    // Если мы на картах ГИС/Ремонт и пришел полигон зоны, то рисуем его площадкой
+    if ((section === 'gis' || section === 'repair') && r.geojson && (r.geojson.type === 'Polygon' || r.geojson.type === 'MultiPolygon')) {
+        searchLayer = L.geoJSON(r.geojson, {
+            style: { color: '#0E5C4F', weight: 3, fillOpacity: 0.25, fillColor: '#2E9A5C' }
+        }).addTo(map);
+        map.fitBounds(searchLayer.getBounds(), { padding: [20, 20] });
+
+        searchLayer.on('click', (e) => {
+             const popupHtml = `
+                <div class="popup-address">${escapeHtml(r.displayName)}</div>
+                <div class="popup-coords">Зона объекта (площадка)</div>
+                <button class="popup-btn" onclick="openRoutePanelTo(${r.lat}, ${r.lon}, '${escapeHtml(r.displayName).replace(/'/g, "\\'")}')">🧭 Маршрут</button>
+                ${buildOpenCardButtonHtml(r.lat, r.lon)}`;
+             L.popup().setLatLng(e.latlng).setContent(popupHtml).openOn(map);
+        });
+    } else {
+        // Иначе (Вывоз мусора) рисуем обычную точку
+        map.setView([r.lat, r.lon], 17);
+        searchLayer = L.marker([r.lat, r.lon], { icon: pinIcon('blue') }).addTo(map);
+
+        searchLayer.on('click', () => {
+            const popupHtml = `
+                <div class="popup-address">${escapeHtml(r.displayName)}</div>
+                <div class="popup-coords">${r.lat.toFixed(6)}, ${r.lon.toFixed(6)}</div>
+                <button class="popup-btn" onclick="openRoutePanelTo(${r.lat}, ${r.lon}, '${escapeHtml(r.displayName).replace(/'/g, "\\'")}')">🧭 Маршрут</button>
+                ${(isAdmin || section === 'trash') ? `<button class="popup-btn" onclick="openPanel('add', {lat: ${r.lat}, lon: ${r.lon}, address: '${escapeHtml(r.displayName).replace(/'/g, "\\'")}'})">➕ Добавить точку</button>` : buildOpenCardButtonHtml(r.lat, r.lon)}`;
+            bindTransientPopup(searchLayer, popupHtml);
+        });
+    }
+
+  } catch (err) {
+    showToast('Ошибка поиска. Проверьте интернет-соединение');
+  } finally {
+    setSearchLoading(false);
+  }
+}
+
+async function geocode(query) {
+  // Сначала ищем полное соответствие
+  let q = /темиртау/i.test(query) ? query : `${query}, Темиртау`;
+  let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=kz&polygon_geojson=1&viewbox=72.75,50.20,73.20,49.90&bounded=1&limit=5`;
+  let res = await fetch(url, { headers: { 'Accept-Language': 'ru' } });
+  if (!res.ok) throw new Error('geocode failed: ' + res.status);
+  let data = await res.json();
+
+  // Умный поиск Nominatim (разбивка на слоги/части) если точный адрес не найден
+  if (!data.length) {
+      const parts = query.split(/[\s,-]+/).filter(x => x.length > 2).map(x => x.substring(0, 4));
+      if (parts.length > 0) {
+         let fuzzyQ = `${parts.join(' ')}, Темиртау`;
+         let fuzzyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fuzzyQ)}&countrycodes=kz&polygon_geojson=1&viewbox=72.75,50.20,73.20,49.90&bounded=1&limit=5`;
+         let fRes = await fetch(fuzzyUrl, { headers: { 'Accept-Language': 'ru' } });
+         if (fRes.ok) data = await fRes.json();
+      }
+  }
+
+  return data.map(d => ({ lat: parseFloat(d.lat), lon: parseFloat(d.lon), displayName: d.display_name, geojson: d.geojson }));
+}
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'ru' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.display_name || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// ===== Геолокация =====
+let geoWatchId = null;
+let geoHasCentered = false;
+
+function userLocationDivIcon() {
+  return L.divIcon({
+    className: 'user-location-marker-wrap',
+    iconSize: [46, 46],
+    iconAnchor: [23, 23],
+    html: '<div class="user-location-icon"><div class="user-location-cone" style="display:none"></div><div class="user-location-pulse"></div><div class="user-location-dot"></div></div>'
+  });
+}
+
+function normalizeHeading(deg) {
+  deg = deg % 360;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
+// Курс, полученный последним от компаса/GPS, "как есть" (от севера, по часовой).
+let lastRawHeadingDeg = null;
+let currentSmoothHeading = null;
+
+// Пока пользователь двигает/крутит карту, метку не трогаем — она "замирает"
+// в последнем показанном направлении, чтобы не дёргаться вместе с картой.
+// Как только карта останавливается, досчитываем актуальный курс.
+let mapInteracting = false;
+let mapInteractionTimer = null;
+function onMapGestureActivity() {
+  mapInteracting = true;
+  clearTimeout(mapInteractionTimer);
+  mapInteractionTimer = setTimeout(() => {
+    mapInteracting = false;
+    renderUserHeading();
+  }, 180);
+}
+
+function currentMapBearing() {
+  return (map && typeof map.getBearing === 'function') ? (map.getBearing() || 0) : 0;
+}
+
+// Живое обновление во время самого жеста поворота (событие 'rotate' летит
+// постоянно, пока пользователь крутит карту двумя пальцами). Без этого конус
+// оставался "замороженным" при повороте карты, а сама карта (вместе с иконкой
+// маркера как её дочерним элементом) крутилась под ним — визуально конус
+// хаотично вращался, пока жест не завершится. Компенсация в реальном времени
+// это устраняет: конус всегда держит реальное направление телефона.
+function renderUserHeadingLive() {
+  if (!userLocationMarker || lastRawHeadingDeg == null) return;
+  const el = userLocationMarker.getElement();
+  const cone = el && el.querySelector('.user-location-cone');
+  if (!cone) return;
+  cone.style.display = 'block';
+  currentSmoothHeading = normalizeHeading(lastRawHeadingDeg - currentMapBearing());
+  cone.style.transform = `translate(-50%, -100%) rotate(${currentSmoothHeading.toFixed(1)}deg)`;
+}
+
+// Иконка маркера — дочерний элемент карты, поэтому при повороте карты
+// (leaflet-rotate) она поворачивается вместе с ней. Чтобы конус всегда
+// показывал реальное направление телефона, вычитаем текущий поворот карты.
+function renderUserHeading() {
+  if (!userLocationMarker || lastRawHeadingDeg == null) return;
+  const el = userLocationMarker.getElement();
+  const cone = el && el.querySelector('.user-location-cone');
+  if (!cone) return;
+  cone.style.display = 'block';
+  const targetDeg = normalizeHeading(lastRawHeadingDeg - currentMapBearing());
+  if (currentSmoothHeading === null) {
+    currentSmoothHeading = targetDeg;
+  } else {
+    let diff = (targetDeg - currentSmoothHeading + 540) % 360 - 180;
+    currentSmoothHeading = normalizeHeading(currentSmoothHeading + diff * 0.25);
+  }
+  cone.style.transform = `translate(-50%, -100%) rotate(${currentSmoothHeading.toFixed(1)}deg)`;
+}
+
+function setUserHeading(targetDeg) {
+  if (!userLocationMarker) return;
+  lastRawHeadingDeg = targetDeg;
+  if (mapInteracting) return; // карта в движении — ждём, пока остановится
+  renderUserHeading();
+}
+
+function hideUserHeading() {
+  lastRawHeadingDeg = null;
+  currentSmoothHeading = null;
+  if (!userLocationMarker) return;
+  const el = userLocationMarker.getElement();
+  const cone = el && el.querySelector('.user-location-cone');
+  if (cone) cone.style.display = 'none';
+}
+
+// Компас даёт направление, куда смотрит телефон, даже стоя на месте —
+// GPS-курс (coords.heading) работает только в движении и часто скачет.
+function bindDeviceOrientation() {
+  if (deviceHeadingHandler) return;
+  deviceHeadingHandler = function (event) {
+    let heading = null;
+    if (typeof event.webkitCompassHeading === 'number' && !isNaN(event.webkitCompassHeading)) {
+      heading = event.webkitCompassHeading; // iOS Safari: уже градусы от севера по часовой стрелке
+    } else if (typeof event.alpha === 'number' && !isNaN(event.alpha)) {
+      heading = 360 - event.alpha; // Android: alpha растёт против часовой стрелки
+    }
+    if (heading != null) {
+      userHeadingSupported = true;
+      setUserHeading(normalizeHeading(heading));
+    }
+  };
+  const attach = () => {
+    if ('ondeviceorientationabsolute' in window) {
+      window.addEventListener('deviceorientationabsolute', deviceHeadingHandler);
+    } else {
+      window.addEventListener('deviceorientation', deviceHeadingHandler);
+    }
+  };
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+: разрешение можно запросить только в ответ на клик — он и есть.
+    DeviceOrientationEvent.requestPermission().then(state => { if (state === 'granted') attach(); }).catch(() => { });
+  } else {
+    attach();
+  }
+}
+
+function unbindDeviceOrientation() {
+  if (!deviceHeadingHandler) return;
+  window.removeEventListener('deviceorientationabsolute', deviceHeadingHandler);
+  window.removeEventListener('deviceorientation', deviceHeadingHandler);
+  deviceHeadingHandler = null;
+  userHeadingSupported = false;
+}
+
+function handleLocateMe() {
+  if (!navigator.geolocation) { showToast('Геолокация не поддерживается этим браузером'); return; }
+
+  if (geoWatchId !== null) {
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+    setLocateActive(false);
+    unbindDeviceOrientation();
+    hideUserHeading();
+    if (userAccuracyCircle) { map.removeLayer(userAccuracyCircle); userAccuracyCircle = null; }
+    localStorage.setItem('trash-map-tracking', 'false'); // Запоминаем выключение
+    showToast('Слежение за геолокацией выключено');
+    return;
+  }
+
+  setLocateLoading(true);
+  geoHasCentered = false;
+  localStorage.setItem('trash-map-tracking', 'true'); // Запоминаем включение
+  bindDeviceOrientation();
+
+  geoWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      setLocateLoading(false);
+      setLocateActive(true);
+      const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+      if (userLocationMarker) {
+        userLocationMarker.setLatLng([latitude, longitude]);
+      } else {
+        userLocationMarker = L.marker([latitude, longitude], {
+          icon: userLocationDivIcon(), zIndexOffset: 1000, interactive: false
+        }).addTo(map);
+      }
+      if (userAccuracyCircle) {
+        userAccuracyCircle.setLatLng([latitude, longitude]);
+        userAccuracyCircle.setRadius(accuracy || 0);
+      } else {
+        userAccuracyCircle = L.circle([latitude, longitude], {
+          radius: accuracy || 0, color: '#2C74B3', weight: 1, fillColor: '#2C74B3', fillOpacity: .12, interactive: false
+        }).addTo(map);
+        if (userAccuracyCircle.bringToBack) userAccuracyCircle.bringToBack();
+      }
+      // Если компас недоступен — берём курс движения от GPS как запасной вариант
+      // (он валиден только при реальном перемещении, поэтому фильтруем по скорости).
+      if (!userHeadingSupported && typeof heading === 'number' && !isNaN(heading) && (speed == null || speed > 0.3)) {
+        setUserHeading(normalizeHeading(heading));
+      }
+      if (!geoHasCentered) {
+        map.setView([latitude, longitude], 18);
+        geoHasCentered = true;
+      }
+    },
+    (err) => {
+      setLocateLoading(false);
+      setLocateActive(false);
+      geoWatchId = null;
+      unbindDeviceOrientation();
+      localStorage.setItem('trash-map-tracking', 'false');
+      showToast('Не удалось определить местоположение: ' + geoErrorMessage(err));
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+// ===== Панель (добавление / детали / вывоз / история) =====
+function openPanel(type, data) {
+  panelType = type;
+  document.getElementById('backdrop').classList.add('show');
+  document.getElementById('panel').classList.add('open');
+  if (type === 'add') {
+    currentDraftData = data;
+    renderAddPanel(data);
+  } else if (type === 'detail') {
+    renderDetailPanel(data);
+  } else if (type === 'collect') {
+    renderCollectPanel(data);
+  } else if (type === 'history') {
+    renderHistoryPanel(data);
+  }
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('show');
+  if (panelType === 'add') removeDraft();
+  stopCameraTracks(); 
+  revokeStoredVideoObjectUrl();
+  panelType = null;
+}
+
+function renderAddPanel(draft) {
+  selectedPhotoDataUrl = null;
+  document.getElementById('panel-title').textContent = 'Отметить мусор';
+  document.getElementById('panel-body').innerHTML = `
+    <label class="field-label">Адрес</label>
+    <input type="text" id="form-address" class="field-input" value="${escapeHtml(draft.address || '')}" placeholder="Впишите адрес вручную">
+    <div class="coords-line">📍 ${draft.lat.toFixed(6)}, ${draft.lon.toFixed(6)}</div>
+
+    <label class="field-label">Комментарий</label>
+    <textarea id="form-comment" class="field-input" rows="3" maxlength="500" placeholder="Например: строительный мусор возле подъезда"></textarea>
+
+    <label class="field-label">Фото</label>
+    <div class="photo-upload">
+      <input type="file" id="form-photo" accept="image/*" capture="environment" style="display:none" onchange="onPhotoSelected(event)">
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('form-photo').click()">📷 Прикрепить фото</button>
+      <img id="photo-preview" class="photo-preview-img" alt="Превью фото">
+    </div>
+
+    <label class="field-label">Ваше имя (необязательно)</label>
+    <input type="text" id="form-name" class="field-input" value="${escapeHtml(myName || '')}" placeholder="Чтобы коллеги знали, кто отметил">
+
+    <div class="panel-actions">
+      <button class="btn btn-secondary" onclick="closePanel()">Отмена</button>
+      <button class="btn btn-primary" id="btn-save-point" onclick="submitAddForm()">Сохранить</button>
+    </div>`;
+}
+
+async function onPhotoSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const img = document.getElementById('photo-preview');
+  try {
+    selectedPhotoDataUrl = await compressImage(file, MAX_MEDIA_BYTES);
+    if (img) { img.src = selectedPhotoDataUrl; img.style.display = 'block'; }
+  } catch (err) {
+    showToast('Не удалось обработать фото, попробуйте другое');
+  }
+}
+
+function compressImage(file, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        let dim = 1000;
+        let quality = 0.75;
+
+        function attempt() {
+          let { width, height } = img;
+          if (width > dim || height > dim) {
+            if (width > height) { height = Math.round(height * dim / width); width = dim; }
+            else { width = Math.round(width * dim / height); height = dim; }
+          }
+          canvas.width = width; canvas.height = height;
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+          if (dataUrl.length <= maxBytes || (dim <= 260 && quality <= 0.3)) {
+            resolve(dataUrl);
+            return;
+          }
+          if (quality > 0.3) quality = Math.max(0.3, quality - 0.15);
+          else dim = Math.round(dim * 0.75);
+          attempt();
+        }
+        attempt();
+      };
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('file read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitAddForm() {
+  const btn = document.getElementById('btn-save-point');
+  const address = document.getElementById('form-address').value.trim() || 'Адрес не указан';
+  const comment = document.getElementById('form-comment').value.trim();
+  const nameInput = document.getElementById('form-name').value.trim();
+  const { lat, lon } = currentDraftData;
+
+  btn.disabled = true;
+  btn.textContent = 'Сохранение…';
+
+  if (nameInput && nameInput !== myName) saveMyName(nameInput);
+
+  const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const newPoint = {
+    lat, lon, address, comment,
+    photo: selectedPhotoDataUrl || null,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    addedBy: nameInput || null
+  };
+
+  if (!FIRESTORE_AVAILABLE) {
+    allPoints.push(Object.assign({ id }, newPoint));
+    closePanel();
+    renderActiveMarkers();
+    updateHistoryBadge();
+    showToast('База не настроена — точка сохранена только у вас в браузере');
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
+    return;
+  }
+
+  try {
+    await db.collection('points').doc(id).set(newPoint);
+    closePanel();
+    showToast('Точка сохранена ✅');
+  } catch (err) {
+    console.error(err);
+    showToast('Не удалось сохранить точку, попробуйте ещё раз');
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
+  }
+}
+
+function renderDetailPanel(p) {
+  revokeStoredVideoObjectUrl();
+  document.getElementById('panel-title').textContent = p.status === 'active' ? 'Требует вывоза' : 'Вывезено';
+  const metaLines = [];
+  if (p.addedBy) metaLines.push(`Отметил(а): ${escapeHtml(p.addedBy)}`);
+  metaLines.push(`Добавлено: ${formatDate(p.createdAt)}`);
+  if (p.status === 'collected') {
+    metaLines.push(`Вывезено: ${formatDate(p.collectedAt)}${p.collectedBy ? ' — ' + escapeHtml(p.collectedBy) : ''}`);
+  }
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="detail-address">${escapeHtml(p.address || 'Адрес не указан')}</div>
+    <div class="coords-line">
+      📍 ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}
+      <button class="link-btn" onclick="copyCoords(${p.lat}, ${p.lon})">копировать</button>
+    </div>
+    ${p.comment ? `<div class="detail-comment">${escapeHtml(p.comment)}</div>` : `<div class="detail-comment muted">Без комментария</div>`}
+    ${p.photo ? `<img src="${p.photo}" class="detail-photo-img" alt="Фото точки">` : ''}
+    
+    ${p.videoUrl ? `
+      <video id="stored-video" class="detail-photo-img" controls playsinline></video>
+      <div id="stored-video-error" class="detail-comment muted" style="display:none; color:var(--pin-active); margin-top:12px;">⚠️ Видео недоступно: файл повреждён или этот формат не поддерживается устройством.</div>
+      <a id="stored-video-download" class="btn btn-secondary" style="display:block; text-align:center; text-decoration:none; margin-top:8px; padding:10px;">💾 Сохранить видео</a>
+    ` : ''}
+
+    ${isAdmin ? `
+      <div class="card-photos-section">
+        <div id="card-photo-slots-${p.id}">
+          <div class="card-photo-slot">
+            <div class="card-photo-slot-info">${p.photo1Url ? '<b>Фото 1</b> загружено' : 'Фото 1 не загружено'}</div>
+            <input type="file" id="card-photo-input-1-${p.id}" accept="image/*" capture="environment" style="display:none" onchange="uploadCardPhoto('${p.id}', 1, event)">
+            <button class="btn btn-secondary btn-sm" id="card-photo-btn-1-${p.id}" onclick="document.getElementById('card-photo-input-1-${p.id}').click()">${p.photo1Url ? '🔄 Заменить' : '📤 Загрузить'}</button>
+            ${p.photo1Url ? `<button class="btn btn-delete-outline btn-sm" onclick="deleteCardPhotoSlot('${p.id}', 1)" title="Удалить фото 1">🗑</button>` : ''}
+          </div>
+          <div class="card-photo-slot">
+            <div class="card-photo-slot-info">${p.photo2Url ? '<b>Фото 2</b> загружено' : 'Фото 2 не загружено'}</div>
+            <input type="file" id="card-photo-input-2-${p.id}" accept="image/*" capture="environment" style="display:none" onchange="uploadCardPhoto('${p.id}', 2, event)">
+            <button class="btn btn-secondary btn-sm" id="card-photo-btn-2-${p.id}" onclick="document.getElementById('card-photo-input-2-${p.id}').click()">${p.photo2Url ? '🔄 Заменить' : '📤 Загрузить'}</button>
+            ${p.photo2Url ? `<button class="btn btn-delete-outline btn-sm" onclick="deleteCardPhotoSlot('${p.id}', 2)" title="Удалить фото 2">🗑</button>` : ''}
+          </div>
+        </div>
+        ${(p.photo1Url || p.photo2Url) ? `
+          <button class="btn btn-secondary" id="show-photos-btn-${p.id}" style="width:100%; margin-top:10px;" onclick="toggleCardPhotos('${p.id}')">🖼️ Показать фото</button>
+          <div class="card-photos-gallery ${(p.photo1Url && p.photo2Url) ? '' : 'single-photo'}" id="card-photos-gallery-${p.id}"></div>
+        ` : ''}
+      </div>
+    ` : ''}
+
+    <div class="detail-meta">${metaLines.join('<br>')}</div>
+    ${p.status === 'active' ? `
+      <button class="btn btn-success" onclick="openCollectForm('${p.id}')">✅ Вывезено</button>
+      ${isAdmin ? `<button class="btn btn-delete-outline" onclick="deleteActivePoint('${p.id}')">🗑 Удалить точку</button>` : ''}
+    ` : ''}`;
+
+  if (p.videoUrl) loadStoredVideo(p.videoUrl, p.id);
+  checkAdminVisibility();
+}
+
+// ===== Фото карточки (до 2 шт. на точку) =====
+// Хранятся в Firebase Storage (не в Firestore), сжимаются в WebP на устройстве
+// перед загрузкой и подгружаются в браузер только по нажатию «Показать фото».
+const CARD_PHOTO_MAX_DIM = 1920;
+const CARD_PHOTO_TARGET_BYTES = 380000; // ~380 КБ — попадает в диапазон 200-400 КБ
+
+function compressToWebp(file, maxDim, targetBytes) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        let dim = maxDim;
+        let quality = 0.82;
+
+        function attempt(type) {
+          let { width, height } = img;
+          if (width > dim || height > dim) {
+            if (width > height) { height = Math.round(height * dim / width); width = dim; }
+            else { width = Math.round(width * dim / height); height = dim; }
+          }
+          canvas.width = width; canvas.height = height;
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error('canvas toBlob failed')); return; }
+            if (type === 'image/webp' && blob.type !== 'image/webp') {
+              // Браузер не умеет кодировать WebP (например, старый Safari) — уходим на JPEG.
+              attempt('image/jpeg');
+              return;
+            }
+            if (blob.size <= targetBytes || (dim <= 480 && quality <= 0.35)) {
+              resolve(blob);
+              return;
+            }
+            if (quality > 0.35) quality = Math.max(0.35, quality - 0.12);
+            else dim = Math.round(dim * 0.8);
+            attempt(type);
+          }, type, quality);
+        }
+        attempt('image/webp');
+      };
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('file read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadCardPhoto(pointId, slot, event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  if (!STORAGE_BUCKET_AVAILABLE || !FIRESTORE_AVAILABLE) {
+    showToast('Firebase Storage/Firestore не настроены — фото не может быть загружено');
+    return;
+  }
+
+  const btn = document.getElementById(`card-photo-btn-${slot}-${pointId}`);
+  const originalLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Загрузка…'; }
+
+  try {
+    const blob = await compressToWebp(file, CARD_PHOTO_MAX_DIM, CARD_PHOTO_TARGET_BYTES);
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const otherExt = ext === 'webp' ? 'jpg' : 'webp';
+    const basePath = `card-photos/${pointId}/photo${slot}`;
+
+    // На случай, если предыдущая версия этого слота была в другом расширении.
+    firebase.storage().ref(`${basePath}.${otherExt}`).delete().catch(() => {});
+
+    const ref = firebase.storage().ref(`${basePath}.${ext}`);
+    await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
+    const url = await ref.getDownloadURL();
+
+    const field = slot === 1 ? 'photo1Url' : 'photo2Url';
+    await db.collection('points').doc(pointId).update({ [field]: url });
+
+    const p = allPoints.find(x => x.id === pointId);
+    if (p) { p[field] = url; renderDetailPanel(p); }
+    showToast('Фото сохранено ✅');
+  } catch (err) {
+    console.error(err);
+    showToast(err && err.code === 'storage/unauthorized'
+      ? 'Нет доступа к Storage — проверьте правила безопасности'
+      : 'Не удалось загрузить фото. Проверьте план Firebase (нужен Blaze) и подключение');
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+  }
+}
+
+function toggleCardPhotos(pointId) {
+  const gallery = document.getElementById(`card-photos-gallery-${pointId}`);
+  const btn = document.getElementById(`show-photos-btn-${pointId}`);
+  const slots = document.getElementById(`card-photo-slots-${pointId}`);
+  if (!gallery || !btn) return;
+
+  if (gallery.classList.contains('show')) {
+    gallery.classList.remove('show');
+    btn.textContent = '🖼️ Показать фото';
+    if (slots) slots.style.display = '';
+    return;
+  }
+
+  // Теги <img> создаются (и, соответственно, файлы запрашиваются с Firebase)
+  // только в момент первого нажатия «Показать фото» для этой конкретной точки.
+  if (!gallery.dataset.loaded) {
+    const p = allPoints.find(x => x.id === pointId);
+    const urls = p ? [p.photo1Url, p.photo2Url].filter(Boolean) : [];
+    gallery.innerHTML = urls.map(u => `<img src="${u}" alt="Фото точки" loading="lazy">`).join('');
+    gallery.dataset.loaded = '1';
+  }
+  gallery.classList.add('show');
+  btn.textContent = '🙈 Скрыть фото';
+  if (slots) slots.style.display = 'none';
+}
+
+function deleteCardPhotos(p) {
+  if (!STORAGE_BUCKET_AVAILABLE || !p) return;
+  ['photo1Url', 'photo2Url'].forEach(field => {
+    if (p[field]) firebase.storage().refFromURL(p[field]).delete().catch(() => {});
+  });
+}
+
+async function deleteCardPhotoSlot(pointId, slot) {
+  if (!confirm('Удалить это фото?')) return;
+  const field = slot === 1 ? 'photo1Url' : 'photo2Url';
+  const basePath = `card-photos/${pointId}/photo${slot}`;
+  try {
+    if (STORAGE_BUCKET_AVAILABLE) {
+      await Promise.all([
+        firebase.storage().ref(`${basePath}.webp`).delete().catch(() => {}),
+        firebase.storage().ref(`${basePath}.jpg`).delete().catch(() => {})
+      ]);
+    }
+    if (FIRESTORE_AVAILABLE) {
+      await db.collection('points').doc(pointId).update({ [field]: null });
+    }
+    const p = allPoints.find(x => x.id === pointId);
+    if (p) {
+      p[field] = null;
+      const gallery = document.getElementById(`card-photos-gallery-${pointId}`);
+      if (gallery) gallery.dataset.loaded = ''; // перегрузить галерею при следующем показе
+      renderDetailPanel(p);
+    }
+    showToast('Фото удалено');
+  } catch (err) {
+    console.error(err);
+    showToast('Не удалось удалить фото');
+  }
+}
+
+function revokeStoredVideoObjectUrl() {
+  if (storedVideoObjectUrl) {
+    URL.revokeObjectURL(storedVideoObjectUrl);
+    storedVideoObjectUrl = null;
+  }
+}
+
+function dataUrlToVideoBlob(dataUrl) {
+  const marker = ';base64,';
+  const markerIndex = dataUrl.toLowerCase().lastIndexOf(marker);
+  if (markerIndex < 0) throw new Error('Invalid video data URL');
+
+  const header = dataUrl.slice(0, markerIndex);
+  const typeMatch = header.match(/^data:([^;,]+)/i);
+  const mimeType = typeMatch && typeMatch[1].toLowerCase().startsWith('video/')
+    ? typeMatch[1].toLowerCase()
+    : 'video/mp4';
+  const binary = atob(dataUrl.slice(markerIndex + marker.length).replace(/\s/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return { blob: new Blob([bytes], { type: mimeType }), mimeType };
+}
+
+function loadStoredVideo(source, pointId) {
+  const video = document.getElementById('stored-video');
+  const error = document.getElementById('stored-video-error');
+  const download = document.getElementById('stored-video-download');
+  if (!video || !error || !download) return;
+
+  const showError = () => {
+    video.style.display = 'none';
+    error.style.display = 'block';
+    download.style.display = 'none';
+  };
+  video.onerror = showError;
+
+  try {
+    if (!String(source).startsWith('data:')) {
+      video.src = source;
+      download.href = source;
+      download.download = `trash_video_${pointId}.mp4`;
+      return;
+    }
+
+    const { blob, mimeType } = dataUrlToVideoBlob(String(source));
+    storedVideoObjectUrl = URL.createObjectURL(blob);
+    video.src = storedVideoObjectUrl;
+    download.href = storedVideoObjectUrl;
+    download.download = `trash_video_${pointId}.${mimeType.includes('webm') ? 'webm' : 'mp4'}`;
+  } catch (err) {
+    console.error('Не удалось подготовить сохранённое видео:', err);
+    showError();
+  }
+}
+
+function openCollectForm(id) {
+  const p = allPoints.find(x => x.id === id);
+  if (!p) return;
+  openPanel('collect', p);
+}
+
+function renderCollectPanel(p) {
+  recordedVideoBase64 = null;
+  document.getElementById('panel-title').textContent = 'Подтверждение вывоза';
+  document.getElementById('panel-body').innerHTML = `
+    <div class="detail-address">${escapeHtml(p.address || 'Адрес не указан')}</div>
+
+    <label class="field-label">Ваше имя</label>
+    <input type="text" id="collect-name" class="field-input" value="${escapeHtml(myName || '')}" placeholder="Кто вывозит">
+
+    <label class="field-label">Видео подтверждение (до 10 секунд)</label>
+    <div class="photo-upload">
+      <video id="camera-feed" autoplay muted playsinline style="display:none; width:100%; border-radius:10px; max-height:260px; background:#000; margin-bottom:10px;"></video>
+      <video id="video-preview" controls playsinline style="display:none; width:100%; border-radius:10px; max-height:260px; background:#000; margin-bottom:10px;"></video>
+      
+      <button type="button" id="btn-start-record" class="btn btn-secondary" style="width:100%" onclick="startRecording()">🎥 Записать видео</button>
+      <div id="video-status" class="field-hint" style="text-align:center; margin-top:8px;"></div>
+    </div>
+
+    <div class="panel-actions">
+      <button class="btn btn-secondary" onclick="closePanel()">Отмена</button>
+      <button class="btn btn-success" id="btn-confirm-collect" style="margin-top:0;" onclick="submitCollectForm('${p.id}')">Подтвердить</button>
+    </div>`;
+}
+
+async function startRecording() {
+  const btn = document.getElementById('btn-start-record');
+  const statusEl = document.getElementById('video-status');
+  const feed = document.getElementById('camera-feed');
+  const preview = document.getElementById('video-preview');
+
+  if (recordedVideoObjectUrl) {
+    URL.revokeObjectURL(recordedVideoObjectUrl);
+    recordedVideoObjectUrl = null;
+  }
+  preview.style.display = 'none';
+  preview.removeAttribute('src');
+  recordedVideoBase64 = null;
+
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      throw new Error('MediaRecorder is not supported');
+    }
+
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: true
+    });
+    
+    feed.srcObject = cameraStream;
+    feed.style.display = 'block';
+
+    const mimeCandidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4'
+    ];
+    const requestedMimeType = mimeCandidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+
+    const options = requestedMimeType
+      ? { mimeType: requestedMimeType, videoBitsPerSecond: 250000, audioBitsPerSecond: 64000 }
+      : { videoBitsPerSecond: 250000, audioBitsPerSecond: 64000 };
+    mediaRecorder = new MediaRecorder(cameraStream, options);
+
+    let chunks = [];
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    
+    mediaRecorder.onstop = async () => {
+      feed.style.display = 'none';
+      stopCameraTracks();
+
+      const actualMimeType = mediaRecorder.mimeType || (chunks[0] && chunks[0].type) || requestedMimeType || 'video/mp4';
+      const blob = new Blob(chunks, { type: actualMimeType });
+      if (!blob.size) {
+        statusEl.textContent = '❌ Видео не записалось. Попробуйте ещё раз.';
+        btn.style.display = 'block';
+        btn.textContent = '🎥 Перезаписать видео';
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const testVideo = document.createElement('video');
+      testVideo.preload = 'metadata';
+      testVideo.muted = true;
+      testVideo.playsInline = true;
+
+      testVideo.onloadedmetadata = () => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const rawDataUrl = String(reader.result || '');
+          const base64Marker = ';base64,';
+          const base64MarkerIndex = rawDataUrl.toLowerCase().lastIndexOf(base64Marker);
+          if (base64MarkerIndex < 0) {
+            URL.revokeObjectURL(objectUrl);
+            statusEl.textContent = '❌ Не удалось подготовить видео для сохранения.';
+            btn.style.display = 'block';
+            btn.textContent = '🎥 Перезаписать видео';
+            return;
+          }
+          const cleanMimeType = actualMimeType.split(';')[0].trim().toLowerCase() || 'video/mp4';
+          const dataUrl = `data:${cleanMimeType};base64,${rawDataUrl.slice(base64MarkerIndex + base64Marker.length)}`;
+          if (dataUrl.length > 1000000) {
+            URL.revokeObjectURL(objectUrl);
+            statusEl.textContent = '⚠️ Видео слишком тяжёлое для базы. Попробуйте снять быстрее.';
+            recordedVideoBase64 = null;
+          } else {
+            recordedVideoBase64 = dataUrl;
+            recordedVideoObjectUrl = objectUrl;
+            preview.src = objectUrl;
+            preview.style.display = 'block';
+            statusEl.textContent = '✅ Видео успешно записано и проверено';
+          }
+          btn.style.display = 'block';
+          btn.textContent = '🎥 Перезаписать видео';
+        };
+        reader.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          statusEl.textContent = '❌ Не удалось подготовить видео для сохранения.';
+          btn.style.display = 'block';
+          btn.textContent = '🎥 Перезаписать видео';
+        };
+        reader.readAsDataURL(blob);
+      };
+      testVideo.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        statusEl.textContent = '❌ Записанный формат видео не поддерживается. Попробуйте снова.';
+        recordedVideoBase64 = null;
+        btn.style.display = 'block';
+        btn.textContent = '🎥 Перезаписать видео';
+      };
+      testVideo.src = objectUrl;
+      testVideo.load();
+    };
+
+    mediaRecorder.start();
+    btn.style.display = 'none';
+
+    let timeLeft = 10;
+    statusEl.textContent = `🔴 Идёт запись... ${timeLeft} сек`;
+    
+    recordTimer = setInterval(() => {
+      timeLeft--;
+      if (timeLeft > 0) {
+        statusEl.textContent = `🔴 Идёт запись... ${timeLeft} сек`;
+      } else {
+        clearInterval(recordTimer);
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+      }
+    }, 1000);
+
+  } catch (err) {
+    statusEl.textContent = '❌ Не удалось получить доступ к камере или микрофону (проверьте разрешения)';
+    console.error(err);
+  }
+}
+
+function stopCameraTracks() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+  if (recordTimer) clearInterval(recordTimer);
+}
+
+async function submitCollectForm(id) {
+  const nameInput = document.getElementById('collect-name').value.trim();
+  if (!nameInput) { showToast('Укажите своё имя'); return; }
+  if (!recordedVideoBase64) { showToast('Запишите корректное видео вывоза'); return; }
+
+  const btn = document.getElementById('btn-confirm-collect');
+  btn.disabled = true;
+  btn.textContent = 'Сохранение…';
+
+  try {
+    await db.collection('points').doc(id).update({
+      status: 'collected',
+      collectedAt: new Date().toISOString(),
+      collectedBy: nameInput,
+      videoUrl: recordedVideoBase64
+    });
+    saveMyName(nameInput);
+    closePanel();
+    showToast('Отмечено как вывезено ✅');
+  } catch (err) {
+    console.error(err);
+    showToast('Не удалось сохранить. Скорее всего файл слишком большой.');
+    btn.disabled = false;
+    btn.textContent = 'Подтвердить';
+  }
+}
+
+async function deleteActivePoint(id) {
+  if (!confirm('Удалить эту точку с карты? Действие нельзя отменить.')) return;
+  try {
+    const existingPoint = allPoints.find(x => x.id === id);
+    if (FIRESTORE_AVAILABLE) {
+      await db.collection('points').doc(id).delete();
+      deleteCardPhotos(existingPoint);
+    } else {
+      allPoints = allPoints.filter(p => p.id !== id);
+      renderActiveMarkers();
+    }
+    closePanel();
+    showToast('Точка удалена');
+  } catch (err) {
+    showToast('Не удалось удалить точку, попробуйте ещё раз');
+  }
+}
+
+function copyCoords(lat, lon) {
+  const text = lat.toFixed(6) + ', ' + lon.toFixed(6);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast('Координаты скопированы'), () => showToast(text));
+  } else {
+    showToast(text);
+  }
+}
+
+function openPointDetail(id) {
+  const p = allPoints.find(x => x.id === id);
+  if (!p) { showToast('Точка не найдена, возможно уже обновлена'); return; }
+  openPanel('detail', p);
+}
+
+function openHistoryPanel() {
+  openPanel('history', getSortedCollected());
+}
+
+function renderHistoryPanel(list) {
+  document.getElementById('panel-title').textContent = 'История вывоза';
+  const total = list.length;
+  let itemsHtml;
+  if (!list.length) {
+    itemsHtml = `<div class="empty-state">Здесь появятся адреса, как только вы отметите их вывезенными</div>`;
+  } else {
+    itemsHtml = `<div class="history-list" id="history-items-container">` + list.map(p => `
+      <div class="history-item" data-id="${p.id}">
+        <div class="history-item-address">${escapeHtml(p.address || 'Без адреса')}</div>
+        <div class="history-item-date">${formatDate(p.collectedAt)}${p.collectedBy ? ' · ' + escapeHtml(p.collectedBy) : ''}</div>
+      </div>`).join('') + `</div>` + `<div class="history-hint">Зажмите адрес, чтобы удалить его из истории</div>`;
+  }
+
+  const searchHtml = list.length ? `
+    <div style="padding: 0 14px 14px;">
+      <input type="text" id="history-search-input" class="field-input" placeholder="🔍 Умный поиск по адресам..." style="background: var(--surface-deep);">
+    </div>
+  ` : '';
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="history-counter">
+      <div class="big-num">${total}</div>
+      <div class="counter-label">адресов вывезено всего</div>
+    </div>
+    ${searchHtml}
+    ${itemsHtml}`;
+
+  if (list.length) {
+    document.getElementById('history-search-input').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      const items = document.querySelectorAll('.history-item');
+      items.forEach(item => {
+        const addr = item.querySelector('.history-item-address').textContent.toLowerCase();
+        if (addr.includes(query)) {
+          item.style.display = 'block';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  }
+}
+
+function updateHistoryBadge() {
+  document.getElementById('history-badge').textContent = allPoints.filter(p => p.status === 'collected').length;
+}
+
+async function deleteFromHistory(id) {
+  const p = allPoints.find(x => x.id === id);
+  try {
+    if (FIRESTORE_AVAILABLE) {
+      await db.collection('points').doc(id).delete();
+      if (p && p.videoUrl && p.videoUrl.includes('firebasestorage') && STORAGE_BUCKET_AVAILABLE) {
+        firebase.storage().refFromURL(p.videoUrl).delete().catch(() => {});
+      }
+      deleteCardPhotos(p);
+    } else {
+      allPoints = allPoints.filter(x => x.id !== id);
+      updateHistoryBadge();
+      renderHistoryPanel(getSortedCollected());
+    }
+    showToast('Запись удалена из истории');
+  } catch (err) {
+    showToast('Не удалось удалить, попробуйте ещё раз');
+  }
+}
+
+let pressTimer = null;
+let pressStartXY = null;
+let pressMoved = false;
+let suppressNextClick = false;
+
+function bindHistoryLongPress() {
+  const body = document.getElementById('panel-body');
+
+  function start(id, x, y) {
+    pressMoved = false;
+    pressStartXY = { x, y };
+    pressTimer = setTimeout(() => {
+      if (!pressMoved) askDeletePassword(id);
+    }, 600);
+  }
+  function move(x, y) {
+    if (!pressStartXY) return;
+    if (Math.abs(x - pressStartXY.x) > 12 || Math.abs(y - pressStartXY.y) > 12) {
+      pressMoved = true;
+      clearTimeout(pressTimer);
+    }
+  }
+  function cancel() { clearTimeout(pressTimer); }
+
+  body.addEventListener('touchstart', (e) => {
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    const t = e.touches[0];
+    start(item.dataset.id, t.clientX, t.clientY);
+  }, { passive: true });
+  body.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    move(t.clientX, t.clientY);
+  }, { passive: true });
+  body.addEventListener('touchend', cancel);
+  body.addEventListener('touchcancel', cancel);
+
+  body.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    start(item.dataset.id, e.clientX, e.clientY);
+  });
+  body.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+  body.addEventListener('mouseup', cancel);
+  body.addEventListener('mouseleave', cancel);
+
+  body.addEventListener('click', (e) => {
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    if (suppressNextClick) { suppressNextClick = false; return; }
+    openPointDetail(item.dataset.id);
+  });
+}
+
+function askDeletePassword(id) {
+  suppressNextClick = true;
+  if (!isAdmin) {
+    showToast('Удаление доступно только администраторам');
+    return;
+  }
+  if (confirm('Удалить эту точку из истории? Действие нельзя отменить.')) {
+    deleteFromHistory(id);
+  }
+}
+
+function loadMyName() {
+  try { myName = localStorage.getItem('trash-map-my-name') || ''; } catch (err) { myName = ''; }
+}
+function saveMyName(name) {
+  myName = name;
+  try { localStorage.setItem('trash-map-my-name', name); } catch (err) { }
+}
+
+function bindUI() {
+  document.getElementById('search-btn').addEventListener('click', () => { hideSearchSuggestions(); handleSearch(); });
+  document.getElementById('search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); hideSearchSuggestions(); handleSearch(); }
+    if (e.key === 'Escape') { hideSearchSuggestions(); }
+  });
+  let searchSuggestTimer = null;
+  document.getElementById('search-input').addEventListener('input', (e) => {
+    clearTimeout(searchSuggestTimer);
+    const val = e.target.value;
+    searchSuggestTimer = setTimeout(() => updateSearchSuggestions(val), 120);
+  });
+  document.getElementById('search-input').addEventListener('focus', (e) => {
+    if (e.target.value.trim().length >= 2) updateSearchSuggestions(e.target.value);
+  });
+  document.getElementById('search-input').addEventListener('blur', () => {
+    setTimeout(hideSearchSuggestions, 150);
+  });
+  document.getElementById('locate-btn').addEventListener('click', handleLocateMe);
+  document.getElementById('route-info-close').addEventListener('click', clearRoute);
+  document.getElementById('route-panel-close').addEventListener('click', closeRoutePanel);
+  document.getElementById('route-btn').addEventListener('click', () => {
+    const panel = document.getElementById('route-panel');
+    panel.classList.contains('hidden') ? openRoutePanelBlank() : closeRoutePanel();
+  });
+  document.getElementById('route-from-geo').addEventListener('click', handleRouteFromGeo);
+  document.getElementById('route-from-show').addEventListener('click', () => handleRouteShow('from'));
+  document.getElementById('route-to-show').addEventListener('click', () => handleRouteShow('to'));
+  document.getElementById('route-build-btn').addEventListener('click', handleRouteBuild);
+  document.querySelectorAll('.route-profile-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      routeProfile = btn.dataset.profile;
+      document.querySelectorAll('.route-profile-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+  document.getElementById('history-btn').addEventListener('click', openHistoryPanel);
+  document.getElementById('admin-btn').addEventListener('click', handleAdminAuth);
+  document.getElementById('panel-close-btn').addEventListener('click', closePanel);
+  document.getElementById('backdrop').addEventListener('click', closePanel);
+  
+  // Кнопка инфо
+  document.getElementById('info-btn-circle').addEventListener('click', () => {
+    document.getElementById('info-panel-box').classList.remove('hidden');
+    document.getElementById('info-btn-circle').style.display = 'none';
+  });
+  document.getElementById('info-close-btn').addEventListener('click', () => {
+    document.getElementById('info-panel-box').classList.add('hidden');
+    document.getElementById('info-btn-circle').style.display = 'flex';
+  });
+
+  bindHistoryLongPress();
+
+  // Отслеживаем активный раздел для защиты от добавления точек
+  const switcher = document.querySelector('.section-switcher');
+  if (switcher) {
+    switcher.addEventListener('click', (e) => {
+      const tab = e.target.closest('.section-tab');
+      if (tab) {
+        const sec = tab.dataset.section;
+        document.body.setAttribute('data-section', sec);
+        localStorage.setItem('trash-map-section', sec); // Сохраняем секцию
+        document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+      }
+    });
+  }
+}
+
+function showToast(msg, duration = 3200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    return '—';
+  }
+}
+
+function geoErrorMessage(err) {
+  switch (err.code) {
+    case err.PERMISSION_DENIED: return 'доступ к геолокации запрещён (разрешите его в настройках браузера)';
+    case err.POSITION_UNAVAILABLE: return 'не удалось определить позицию';
+    case err.TIMEOUT: return 'превышено время ожидания';
+    default: return 'неизвестная ошибка';
+  }
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function setSearchLoading(loading) {
+  const btn = document.getElementById('search-btn');
+  btn.disabled = loading;
+  btn.textContent = loading ? '⏳' : '🔍';
+}
+
+function setLocateLoading(loading) {
+  const btn = document.getElementById('locate-btn');
+  btn.disabled = loading;
+  if (loading) btn.textContent = '⏳';
+  else if (!btn.classList.contains('locate-active')) btn.textContent = '🎯';
+}
+
+function setLocateActive(active) {
+  const btn = document.getElementById('locate-btn');
+  btn.classList.toggle('locate-active', active);
+  btn.textContent = active ? '🎯' : '🎯';
+  btn.title = active ? 'Слежение включено (нажмите, чтобы выключить)' : 'Моё местоположение';
+}
+</script>
+<script src="gis-control-data.js"></script>
+<script src="repair-works-data.js"></script>
+<script src="house-numbers-data.js"></script>
+<script src="landmarks-data.js"></script>
+<script src="footpaths-data.js"></script>
+<script src="streets-data.js"></script>
+<script src="multi-sections.js"></script>
+</body>
+</html>
