@@ -748,7 +748,7 @@ function handleAdminAuth() {
     }
   } else {
     const pass = prompt('Введите пароль администратора:');
-    if (pass === '050505') {
+    if (pass === '') {
       isAdmin = true;
       localStorage.setItem('trash-map-admin', 'true');
       updateAdminUI();
