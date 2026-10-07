@@ -1,149 +1,173 @@
-# 🗺️ Web-GIS Platform: GIS Control & Repair Works (Temirtau)
+# Municipal Infrastructure GIS Platform
 
-An interactive geographic information system (GIS) designed for monitoring urban infrastructure, playgrounds, repair and restoration works (RVR), and administrative sectors in Temirtau.
+A web-based GIS platform built for municipal infrastructure management in Temirtau, Kazakhstan.
 
----
+The platform combines interactive mapping, infrastructure data management, spatial analysis, cloud synchronization, and field-oriented tools in a single browser-based application.
 
-## 🚀 Key Features
-
-* **Multi-Segment Map Control**:
-* **GIS Control**: Visualization of cadastral boundaries, playgrounds, and administrative sectors.
-* **Repair Works (RVR)**: Tracking repair sites, registering defects, and monitoring work completion status.
-* **Waste Management**: Integration with the container yard registry and collection history.
-
-
-* **Administrative Tools**:
-* **Polygon Drawing**: Interactive area creation with automatic centroid calculation and optional point-marker generation.
-* **Point Placement**: Marker positioning via direct map clicks.
-* **Editing & Deletion**: Modifying names, surface area values, cadastral numbers, and descriptions.
-
-
-* **Interactive Floating Card**:
-* Dynamically anchored to map objects during panning, zooming, and rotation.
-* Photo attachment support (up to 2 photos per object) with client-side WebP compression and uploads to Firebase Storage.
-
-
-* **Filtering & Task Management**:
-* Filtering repair sites based on pending tasks (e.g., painting, sand filling).
-* Status highlighting and administrative task toggles.
-
-
-* **Spatial Analysis & Registry**:
-* Automatic grouping of objects into microdistricts/sectors using a **Point-in-Polygon** (Ray-Casting) algorithm.
-* Bulk export and clipboard copying of sector addresses and registry data.
-* Walking route generation for residential yards integrated with **Google Maps Directions API**.
-
-
-* **Bilingual Interface (i18n)**:
-* Dynamic language switching with automatic translation of key terms (Russian / Kazakh).
-
-
-* **Data Synchronization**:
-* Hybrid operation: Real-time **Firebase Firestore** updates with automatic fallback to `localStorage` when offline.
-
-
+**[Live Demo](https://temirtauupcois.vercel.app/)** · **[Source Code](https://github.com/Spiller250/temirtau-gis-platform)**
 
 ---
 
-## 🛠️ Tech Stack
+## Project Overview
 
-* **Frontend**: HTML5, CSS3 (Custom CSS variables), Vanilla JavaScript (ES6+).
-* **Map Engine**: [Leaflet.js](https://leafletjs.com/) (Markers, Polygons, Layers, Geo-events).
-* **Backend / Database**:
-* **Firebase Firestore** (Real-time DB for storing overrides and new objects).
-* **Firebase Storage** (Photo storage).
+Municipal infrastructure is distributed across large geographic areas, making it difficult to manage using static spreadsheets and separate data sources.
 
+This project provides a centralized map-based interface for visualizing, searching, organizing, and updating infrastructure data.
 
-* **Client Persistence**: `localStorage` (for offline resilience).
+The system was developed around a real municipal use case in Temirtau, Kazakhstan.
 
 ---
 
-## 📁 Project Structure
+## Key Features
 
-```text
-.
-├── index.html              # Main page, DOM layout, control panels, map container
-├── multi-sections.js       # Core GIS module (UI logic, event listeners, Firestore, Leaflet integration)
-├── gis-control-data.js     # Static dataset for GIS Control (window.GIS_CONTROL_DATA)
-├── repair-works-data.js    # Static dataset for Repair Works (window.REPAIR_WORKS_DATA)
-└── README.md               # Documentation
+### Interactive GIS
 
-```
+* Interactive map built with Leaflet
+* Infrastructure points and polygon layers
+* Administrative areas and geographic zones
+* Search and filtering
+* Custom map markers and data visualization
 
----
+### Infrastructure Management
 
-## ⚠️ Script Loading Order
+* Structured registry of mapped objects
+* Add, edit, and remove infrastructure records
+* Object information displayed directly on the map
+* Photo attachments for mapped objects
 
-`multi-sections.js` relies on global context variables (`window.map`, `window.db`, static data objects). In `index.html`, scripts **must** be loaded in this exact sequence:
+### Spatial Analysis
 
-```html
-<!-- 1. Leaflet & Firebase SDKs -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://www.gstatic.com/firebasejs/.../firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/.../firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/.../firebase-storage.js"></script>
+* Point-in-polygon analysis
+* Automatic geographic classification of objects
+* Polygon-based area selection and filtering
 
-<!-- 2. Static Data Files -->
-<script src="gis-control-data.js"></script>
-<script src="repair-works-data.js"></script>
+### Cloud Data
 
-<!-- 3. Map Initialization (Instantiates `window.map`) -->
-<script src="main-map-init.js"></script>
+* Firebase Firestore database
+* Firebase Storage for uploaded images
+* Data synchronization between clients
+* Local persistence fallback for unreliable connections
 
-<!-- 4. Core GIS Application Logic -->
-<script src="multi-sections.js"></script>
+### Field-Oriented Workflow
 
-```
+* Responsive interface for mobile devices
+* Map-first navigation
+* Quick object lookup and editing
+* Address and route utilities
 
----
+### Localization
 
-## 📊 Feature Data Schema
-
-Objects in `window.GIS_CONTROL_DATA`, `window.REPAIR_WORKS_DATA`, and Firestore collections must follow this structure:
-
-```json
-{
-  "id": "repair-0001",
-  "name": "№66 — 3rd A Microdistrict...",
-  "folder": "Cadastral Zones",
-  "description": "Defect details, area size, cadastral numbers...",
-  "geometry": {
-    "type": "Polygon",
-    "coordinates": [[
-      {"lat": 50.063155, "lng": 72.953948},
-      {"lat": 50.063261, "lng": 72.953870}
-    ]]
-  },
-  "style": {
-    "color": "#a52714",
-    "opacity": 1,
-    "fillColor": "#a52714",
-    "fillOpacity": 0.12,
-    "weight": 2
-  },
-  "tasks": {
-    "paint": false,
-    "sand": true
-  },
-  "photo1Url": "https://...",
-  "photo2Url": "https://..."
-}
-
-```
-
-> **Firestore Geometry Note**: Because Firestore restricts deeply nested array structures inside objects, the `geometry` object is serialized (`JSON.stringify(geometry)`) prior to database writes and parsed back into an object upon retrieval.
+* Russian language
+* Kazakh language
+* Responsive desktop and mobile layouts
 
 ---
 
-## 🔧 Setup & Local Development
+## Technical Stack
 
-1. Clone the repository:
-```bash
-git clone https://github.com/your-org/temirtau-gis-map.git
+**Frontend**
 
-```
+* HTML5
+* CSS3
+* Vanilla JavaScript
 
+**Mapping**
 
-2. Place `gis-control-data.js` and `repair-works-data.js` in the root directory alongside `index.html`.
-3. Ensure your Firebase configuration is initialized so that `db` (Firestore) and `firebase.storage()` are accessible in the global scope.
-4. Serve the directory using a local web server (e.g., Live Server in VS Code or `python -m http.server 8000`).
+* Leaflet.js
+* GeoJSON
+* Point-in-polygon spatial processing
+
+**Backend / Cloud**
+
+* Firebase Firestore
+* Firebase Storage
+
+**Persistence**
+
+* Browser local storage
+
+**Deployment**
+
+* Vercel
+
+---
+
+## My Role
+
+**Developer**
+
+I designed and implemented the web application, including the interactive GIS interface, map layers, infrastructure management workflows, spatial processing, Firebase integration, responsive UI, and deployment.
+
+---
+
+## Technical Highlights
+
+### Spatial Data Processing
+
+The application uses geographic coordinates and polygon boundaries to determine which administrative or geographic area a mapped object belongs to.
+
+### Cloud Synchronization
+
+Infrastructure data can be synchronized through Firestore, while local persistence provides a fallback when the network connection is unavailable.
+
+### Map-Based Data Management
+
+Instead of managing infrastructure exclusively through tables, users can locate and interact with objects directly on the map.
+
+### Responsive Interface
+
+The interface was designed for both desktop and mobile environments, allowing the system to be used outside of a traditional office workstation.
+
+---
+
+## Project Context
+
+This project was created for a real municipal infrastructure use case in Temirtau, Kazakhstan.
+
+The public repository is intended to demonstrate the technical implementation and architecture of the project. Operational data and sensitive configuration may be omitted or sanitized.
+
+---
+
+## Screenshots
+
+### Main GIS Interface
+
+*Add screenshot here*
+
+### Infrastructure Object
+
+*Add screenshot here*
+
+### Data Management / Editing
+
+*Add screenshot here*
+
+### Mobile Interface
+
+*Add screenshot here*
+
+---
+
+## What This Project Demonstrates
+
+This project demonstrates practical experience with:
+
+* Web GIS development
+* Interactive mapping
+* Geographic data processing
+* Cloud databases
+* CRUD application architecture
+* Responsive web interfaces
+* Firebase integration
+* Data visualization
+* Deployment of production-oriented web applications
+
+---
+
+## Author
+
+**Bogdan Shutov**
+
+Web & GIS Developer
+
+Interested in software engineering, geospatial systems, embedded systems, and aerospace engineering.
